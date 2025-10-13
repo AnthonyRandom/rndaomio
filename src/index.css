@@ -1,0 +1,335 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 8%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 8%;
+
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 24 100% 85%;
+    --accent-foreground: 0 0% 8%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 0 0% 83%;
+
+    --radius: 0rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'JetBrains Mono', 'Courier New', 'Consolas', monospace;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .terminal-border {
+    border: 1px solid hsl(var(--border));
+    box-shadow: 
+      0 0 0 1px hsl(var(--border)),
+      inset 0 0 0 1px hsl(var(--border));
+  }
+
+  .glitch-text {
+    position: relative;
+    animation: glitch-skew 0.5s infinite;
+  }
+
+  .glitch-text::before,
+  .glitch-text::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .glitch-text::before {
+    left: 2px;
+    text-shadow: -2px 0 #ff00de;
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim 0.3s infinite linear alternate-reverse;
+  }
+
+  .glitch-text::after {
+    left: -2px;
+    text-shadow: -2px 0 #00fff9;
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim 0.3s infinite linear alternate-reverse;
+  }
+
+  @keyframes glitch-anim {
+    0% {
+      clip: rect(10px, 9999px, 31px, 0);
+      transform: translateX(0);
+    }
+    10% {
+      clip: rect(85px, 9999px, 140px, 0);
+      transform: translateX(-5px);
+    }
+    20% {
+      clip: rect(40px, 9999px, 66px, 0);
+      transform: translateX(5px);
+    }
+    30% {
+      clip: rect(25px, 9999px, 99px, 0);
+      transform: translateX(-3px);
+    }
+    40% {
+      clip: rect(52px, 9999px, 74px, 0);
+      transform: translateX(3px);
+    }
+    50% {
+      clip: rect(63px, 9999px, 29px, 0);
+      transform: translateX(0);
+    }
+    60% {
+      clip: rect(15px, 9999px, 45px, 0);
+      transform: translateX(-2px);
+    }
+    70% {
+      clip: rect(70px, 9999px, 110px, 0);
+      transform: translateX(4px);
+    }
+    80% {
+      clip: rect(35px, 9999px, 80px, 0);
+      transform: translateX(-4px);
+    }
+    90% {
+      clip: rect(55px, 9999px, 95px, 0);
+      transform: translateX(2px);
+    }
+    100% {
+      clip: rect(20px, 9999px, 60px, 0);
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes glitch-skew {
+    0% {
+      transform: skew(0deg);
+    }
+    10% {
+      transform: skew(-2deg);
+    }
+    20% {
+      transform: skew(2deg);
+    }
+    30% {
+      transform: skew(-1deg);
+    }
+    40% {
+      transform: skew(1deg);
+    }
+    50% {
+      transform: skew(0deg);
+    }
+    60% {
+      transform: skew(1deg);
+    }
+    70% {
+      transform: skew(-2deg);
+    }
+    80% {
+      transform: skew(2deg);
+    }
+    90% {
+      transform: skew(-1deg);
+    }
+    100% {
+      transform: skew(0deg);
+    }
+  }
+
+  .scan-line {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(255, 255, 255, 0.15),
+      transparent
+    );
+    pointer-events: none;
+    animation: scan-line 4s linear infinite;
+    z-index: 9999;
+  }
+
+  .blink {
+    animation: blink 0.3s infinite;
+  }
+
+  @keyframes blink {
+    0%, 49% {
+      opacity: 1;
+    }
+    50%, 100% {
+      opacity: 0;
+    }
+  }
+
+  .rapid-blink {
+    animation: rapid-blink 0.1s infinite;
+  }
+
+  @keyframes rapid-blink {
+    0%, 49% {
+      opacity: 1;
+    }
+    50%, 100% {
+      opacity: 0.3;
+    }
+  }
+
+  .color-flash {
+    animation: color-flash 0.2s infinite;
+  }
+
+  @keyframes color-flash {
+    0% {
+      filter: hue-rotate(0deg);
+    }
+    25% {
+      filter: hue-rotate(90deg);
+    }
+    50% {
+      filter: hue-rotate(180deg);
+    }
+    75% {
+      filter: hue-rotate(270deg);
+    }
+    100% {
+      filter: hue-rotate(360deg);
+    }
+  }
+
+  .pixelate {
+    animation: pixelate 2s steps(8) forwards;
+  }
+
+  @keyframes pixelate {
+    0% {
+      filter: blur(10px);
+      opacity: 0;
+    }
+    100% {
+      filter: blur(0);
+      opacity: 1;
+    }
+  }
+
+  .stroke-fill {
+    animation: stroke-fill 0.6s ease-in-out forwards;
+  }
+
+  @keyframes stroke-fill {
+    0% {
+      color: transparent;
+      text-shadow: 
+        -1px -1px 0 hsl(var(--foreground)),
+        1px -1px 0 hsl(var(--foreground)),
+        -1px 1px 0 hsl(var(--foreground)),
+        1px 1px 0 hsl(var(--foreground));
+    }
+    100% {
+      color: hsl(var(--foreground));
+      text-shadow: none;
+    }
+  }
+
+  .glitch-trail {
+    position: relative;
+  }
+
+  .glitch-trail::after {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0.5;
+    animation: trail 0.3s infinite;
+  }
+
+  @keyframes trail {
+    0% {
+      transform: translateX(0);
+      opacity: 0.5;
+    }
+    50% {
+      transform: translateX(-5px);
+      opacity: 0.3;
+    }
+    100% {
+      transform: translateX(-10px);
+      opacity: 0;
+    }
+  }
+
+  .noise {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    opacity: 0.03;
+    z-index: 9998;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  @keyframes glitch-scan {
+    0%, 100% {
+      transform: translateY(0);
+      opacity: 0.2;
+    }
+    50% {
+      transform: translateY(100%);
+      opacity: 0.3;
+    }
+  }
+
+  .animate-glitch-scan {
+    animation: glitch-scan 1.5s ease-in-out infinite;
+  }
+}
+
