@@ -62,9 +62,11 @@ export function QualityWarningModal({
             onClick={(e) => e.stopPropagation()}
           >
               <motion.div
-                className="absolute inset-0 bg-yellow-500 opacity-0"
-                animate={{ opacity: [0, 0.1, 0] }}
-                transition={{ duration: ANIMATION_DURATIONS.scanLine, repeat: Infinity }}
+                className="absolute inset-0 bg-yellow-500 opacity-20"
+                initial={{ x: '-100%' }}
+                animate={{ x: '100%' }}
+                exit={{ x: '200%' }}
+                transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
               />
 
               <div className="relative z-10 space-y-4">

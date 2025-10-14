@@ -1,9 +1,17 @@
 import { fileTypeFromBuffer } from 'file-type'
 
 const BLOCKED_EXTENSIONS = [
-  'exe', 'msi', 'zip', 'rar', '7z', 'dmg', 'pkg', 'deb', 'apk', 
-  'jar', 'dll', 'tar', 'gz', 'bz2', 'xz', 'iso', 'bin', 'bat', 
-  'cmd', 'sh', 'app', 'com', 'scr', 'vbs', 'js', 'jse'
+  'exe', 'msi', 'zip', 'rar', '7z', 'dmg', 'pkg', 'deb', 'apk',
+  'jar', 'dll', 'tar', 'gz', 'bz2', 'xz', 'iso', 'bin', 'bat',
+  'cmd', 'sh', 'app', 'com', 'scr', 'vbs', 'js', 'jse',
+  // Security risks
+  'ipa',
+  // Database files
+  'db', 'sqlite', 'mdb', 'accdb',
+  // DRM/Protected
+  'm4p', 'vob',
+  // Complex/Proprietary
+  'cr2', 'nef', 'arw', 'psd', 'ai', 'blend', 'fbx', 'obj', 'stl', 'indd'
 ]
 
 const BLOCKED_MIME_TYPES = [
