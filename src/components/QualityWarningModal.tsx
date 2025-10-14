@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Button } from './ui/button'
 import { AlertTriangle } from 'lucide-react'
 import { ScrambleText } from './ScrambleText'
+import { ANIMATION_DURATIONS, SPRING_CONFIGS } from '@/lib/animationConstants'
 
 interface QualityWarningModalProps {
   isOpen: boolean
@@ -52,18 +53,18 @@ export function QualityWarningModal({
             onClick={onCancel}
           />
           <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 100000 }}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="border-4 border-yellow-500 bg-card max-w-md w-full p-6 shadow-2xl relative overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={SPRING_CONFIGS.modal}
+            className="border-4 border-yellow-500 bg-card max-w-md w-full p-6 shadow-2xl relative overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
               <motion.div
                 className="absolute inset-0 bg-yellow-500 opacity-0"
                 animate={{ opacity: [0, 0.1, 0] }}
-                transition={{ duration: 2, repeat: Infinity }}
+                transition={{ duration: ANIMATION_DURATIONS.scanLine, repeat: Infinity }}
               />
 
               <div className="relative z-10 space-y-4">
@@ -73,7 +74,7 @@ export function QualityWarningModal({
                       rotate: [0, -10, 10, -10, 0],
                       scale: [1, 1.1, 1]
                     }}
-                    transition={{ duration: 0.5 }}
+                    transition={{ duration: ANIMATION_DURATIONS.medium }}
                   >
                     <AlertTriangle className="h-8 w-8 text-yellow-500" />
                   </motion.div>

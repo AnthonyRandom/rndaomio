@@ -7,10 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ScrambleText } from './ScrambleText'
 import { QualityWarningModal } from './QualityWarningModal'
 import { Download, Zap, CheckCircle2, AlertCircle, Info } from 'lucide-react'
-import { formatBytes, generateId } from '@/lib/utils'
+import { formatBytes, generateId, formatFileSizeMB, getTargetSizeMB, isFileAlreadyUnderLimit } from '@/lib/utils'
+import { ANIMATION_DURATIONS, SPRING_CONFIGS } from '@/lib/animationConstants'
 import type { WorkerRequest, WorkerResponse } from '@/lib/compressionWorker'
-import type { CompressionResult } from '@/lib/compressionStrategies'
-import { compressGIF } from '@/lib/compressionStrategies'
+import type { CompressionResult } from '@/lib/compression'
+import { compressGIF } from '@/lib/compression'
 
 const SIZE_LIMITS = {
   '10MB': 10 * 1024 * 1024,
@@ -96,11 +97,11 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
   useEffect(() => {
     if (selectedFile && !isCompressing && !compressedFile) {
       const targetSizeBytes = SIZE_LIMITS[targetSize as keyof typeof SIZE_LIMITS]
-      const fileSizeMB = (selectedFile.size / (1024 * 1024)).toFixed(2)
-      const targetSizeMB = (targetSizeBytes / (1024 * 1024)).toFixed(0)
+      const fileSizeMB = formatFileSizeMB(selectedFile.size)
+      const targetSizeMB = getTargetSizeMB(targetSizeBytes)
 
       // Check if file is already under target size
-      if (selectedFile.size <= targetSizeBytes) {
+      if (isFileAlreadyUnderLimit(selectedFile.size, targetSizeBytes)) {
         if (selectedFile.type.startsWith('video/')) {
           setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed, but you can still download it.`)
         } else {
@@ -130,11 +131,11 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
 
     // Immediate validation after file selection
     const targetSizeBytes = SIZE_LIMITS[targetSize as keyof typeof SIZE_LIMITS]
-    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-    const targetSizeMB = (targetSizeBytes / (1024 * 1024)).toFixed(0)
+    const fileSizeMB = formatFileSizeMB(file.size)
+    const targetSizeMB = getTargetSizeMB(targetSizeBytes)
 
     // Check if file is already under target size
-    if (file.size <= targetSizeBytes) {
+    if (isFileAlreadyUnderLimit(file.size, targetSizeBytes)) {
       if (file.type.startsWith('video/')) {
         setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed, but you can still download it.`)
       } else {
@@ -346,19 +347,19 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
     <div className="space-y-8">
       <div className="border-4 border-border bg-card/50 p-8">
         <div className="space-y-6">
-          <motion.div 
+          <motion.div
             className="border-b-2 border-border pb-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: ANIMATION_DURATIONS.normal }}
           >
             <h2 className="text-2xl font-bold uppercase tracking-wider flex items-center gap-2">
               <motion.div
-                animate={{ 
+                animate={{
                   rotate: [0, -10, 10, -5, 5, 0],
                   scale: [1, 1.1, 1]
                 }}
-                transition={{ duration: 0.5, delay: 0.5 }}
+                transition={{ duration: ANIMATION_DURATIONS.medium, delay: 0.5 }}
               >
                 <Zap className="h-6 w-6" />
               </motion.div>
@@ -474,7 +475,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
                         <motion.div
                           className="absolute inset-0 bg-accent opacity-0"
                           animate={{ opacity: [0, 0.3, 0] }}
-                          transition={{ duration: 1.5, repeat: Infinity }}
+                          transition={{ duration: ANIMATION_DURATIONS.verySlow, repeat: Infinity }}
                         />
                       )}
                     </AnimatePresence>
@@ -482,7 +483,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
                       {isCompressing ? (
                         <motion.span
                           animate={{ opacity: [1, 0.5, 1] }}
-                          transition={{ duration: 0.5, repeat: Infinity }}
+                          transition={{ duration: ANIMATION_DURATIONS.medium, repeat: Infinity }}
                         >
                           PROCESSING...
                         </motion.span>
@@ -504,21 +505,21 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
                 <div className="flex justify-between text-sm font-bold uppercase">
                   <motion.span
                     animate={{ opacity: [1, 0.6, 1] }}
-                    transition={{ duration: 0.3, repeat: Infinity }}
+                    transition={{ duration: ANIMATION_DURATIONS.normal, repeat: Infinity }}
                   >
                     COMPRESSING
                   </motion.span>
                   <motion.span
                     className="tabular-nums"
                     animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 0.3, repeat: Infinity }}
+                    transition={{ duration: ANIMATION_DURATIONS.normal, repeat: Infinity }}
                   >
                     {progress}%
                   </motion.span>
                 </div>
                 <motion.div
                   animate={{ opacity: [1, 0.8, 1] }}
-                  transition={{ duration: 0.5, repeat: Infinity }}
+                  transition={{ duration: ANIMATION_DURATIONS.medium, repeat: Infinity }}
                 >
                   <Progress value={progress} className="relative overflow-hidden" />
                 </motion.div>
@@ -529,21 +530,21 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
               <motion.div
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 150, damping: 12 }}
+                transition={SPRING_CONFIGS.success}
                 className="border-4 border-accent bg-accent/10 p-6 space-y-4 relative overflow-hidden"
               >
                 <motion.div
                   className="absolute inset-0 bg-accent opacity-0"
                   animate={{ opacity: [0, 0.15, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
+                  transition={{ duration: ANIMATION_DURATIONS.scanLine, repeat: Infinity }}
                 />
                 <div className="flex items-center gap-2 text-accent relative z-10">
                   <motion.div
-                    animate={{ 
+                    animate={{
                       scale: [1, 1.2, 1],
                       rotate: [0, 360]
                     }}
-                    transition={{ duration: 0.6 }}
+                    transition={{ duration: ANIMATION_DURATIONS.slow }}
                   >
                     <CheckCircle2 className="h-6 w-6" />
                   </motion.div>
@@ -684,23 +685,23 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
-                whileHover={{ x: 4, transition: { duration: 0.1 } }}
+                whileHover={{ x: 4, transition: { duration: ANIMATION_DURATIONS.fast } }}
                 className="border-2 border-border p-4 hover:bg-secondary/50 transition-colors relative overflow-hidden"
               >
                 <motion.div
                   className="absolute left-0 top-0 h-full w-1 bg-accent opacity-0"
                   whileHover={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: ANIMATION_DURATIONS.fast }}
                 />
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="font-bold text-sm uppercase">{item.originalName}</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {formatBytes(item.originalSize)} → {formatBytes(item.compressedSize)} 
-                      <motion.span 
+                      <motion.span
                         className="ml-2 text-accent inline-block"
                         animate={{ scale: [1, 1.05, 1] }}
-                        transition={{ duration: 2, repeat: Infinity, delay: index * 0.3 }}
+                        transition={{ duration: ANIMATION_DURATIONS.scanLine, repeat: Infinity, delay: index * 0.3 }}
                       >
                         (-{((1 - item.compressedSize / item.originalSize) * 100).toFixed(0)}%)
                       </motion.span>

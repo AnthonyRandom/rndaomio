@@ -21,3 +21,15 @@ export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
+export function formatFileSizeMB(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(2)
+}
+
+export function getTargetSizeMB(targetSizeBytes: number): string {
+  return (targetSizeBytes / (1024 * 1024)).toFixed(0)
+}
+
+export function isFileAlreadyUnderLimit(fileSize: number, targetSizeBytes: number): boolean {
+  return fileSize <= targetSizeBytes
+}
+

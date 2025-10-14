@@ -1,5 +1,5 @@
 import { validateFile } from './fileValidator'
-import { compressImage, compressGIF, compressVideo, type CompressionResult } from './compressionStrategies'
+import { compressImage, compressGIF, compressVideo, type CompressionResult } from './compression'
 
 export interface WorkerRequest {
   type: 'compress'
