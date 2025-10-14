@@ -1,4 +1,4 @@
-import { useState, useRef, DragEvent } from 'react'
+import { useState, useRef, useEffect, DragEvent } from 'react'
 import { Upload, File, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn, formatBytes } from '@/lib/utils'
@@ -6,12 +6,22 @@ import { cn, formatBytes } from '@/lib/utils'
 interface FileUploaderProps {
   onFileSelect: (file: File) => void
   maxSize?: number
+  shouldClearFile?: boolean
 }
 
-export function FileUploader({ onFileSelect, maxSize }: FileUploaderProps) {
+export function FileUploader({ onFileSelect, maxSize, shouldClearFile }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (shouldClearFile) {
+      setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }, [shouldClearFile])
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()

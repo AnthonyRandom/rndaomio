@@ -10,6 +10,7 @@ import { Download, Zap, CheckCircle2, AlertCircle, Info } from 'lucide-react'
 import { formatBytes, generateId } from '@/lib/utils'
 import type { WorkerRequest, WorkerResponse } from '@/lib/compressionWorker'
 import type { CompressionResult } from '@/lib/compressionStrategies'
+import { compressGIF } from '@/lib/compressionStrategies'
 
 const SIZE_LIMITS = {
   '10MB': 10 * 1024 * 1024,
@@ -42,6 +43,8 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
   const [error, setError] = useState<string | null>(null)
   const [showQualityWarning, setShowQualityWarning] = useState(false)
   const [pendingResult, setPendingResult] = useState<CompressionResult | null>(null)
+  const [fileAlreadyUnderLimit, setFileAlreadyUnderLimit] = useState(false)
+  const [shouldClearFile, setShouldClearFile] = useState(false)
   
   const workerRef = useRef<Worker | null>(null)
   const compressedBlobRef = useRef<string | null>(null)
@@ -93,18 +96,25 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
   useEffect(() => {
     if (selectedFile && !isCompressing && !compressedFile) {
       const targetSizeBytes = SIZE_LIMITS[targetSize as keyof typeof SIZE_LIMITS]
-      
-      if (selectedFile.type.startsWith('video/')) {
-        const fileSizeMB = (selectedFile.size / (1024 * 1024)).toFixed(2)
-        const targetSizeMB = (targetSizeBytes / (1024 * 1024)).toFixed(0)
-        
-        if (selectedFile.size > targetSizeBytes) {
+      const fileSizeMB = (selectedFile.size / (1024 * 1024)).toFixed(2)
+      const targetSizeMB = (targetSizeBytes / (1024 * 1024)).toFixed(0)
+
+      // Check if file is already under target size
+      if (selectedFile.size <= targetSizeBytes) {
+        if (selectedFile.type.startsWith('video/')) {
+          setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed, but you can still download it.`)
+        } else {
+          setError(`Your ${selectedFile.type.startsWith('image/gif') ? 'GIF' : 'image'} (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed!`)
+        }
+        setFileAlreadyUnderLimit(true)
+      } else {
+        // File needs compression
+        setFileAlreadyUnderLimit(false)
+        if (selectedFile.type.startsWith('video/')) {
           setError(`Video compression is not yet implemented. Your ${fileSizeMB} MB video cannot be compressed to ${targetSizeMB} MB. Please use image or GIF files for now. Video support coming soon!`)
         } else {
-          setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed, but you can still download it.`)
+          setError(null)
         }
-      } else {
-        setError(null)
       }
     }
   }, [targetSize, selectedFile, isCompressing, compressedFile])
@@ -115,52 +125,91 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
     setCompressedFile(null)
     setProgress(0)
     setError(null)
-    
+    setFileAlreadyUnderLimit(false)
+    setShouldClearFile(false)
+
     // Immediate validation after file selection
     const targetSizeBytes = SIZE_LIMITS[targetSize as keyof typeof SIZE_LIMITS]
-    
-    // Check file type and show warnings immediately
-    if (file.type.startsWith('video/')) {
-      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-      const targetSizeMB = (targetSizeBytes / (1024 * 1024)).toFixed(0)
-      
-      if (file.size > targetSizeBytes) {
-        setError(`Video compression is not yet implemented. Your ${fileSizeMB} MB video cannot be compressed to ${targetSizeMB} MB. Please use image or GIF files for now. Video support coming soon!`)
-      } else {
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+    const targetSizeMB = (targetSizeBytes / (1024 * 1024)).toFixed(0)
+
+    // Check if file is already under target size
+    if (file.size <= targetSizeBytes) {
+      if (file.type.startsWith('video/')) {
         setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed, but you can still download it.`)
+      } else {
+        setError(`Your ${file.type.startsWith('image/gif') ? 'GIF' : 'image'} (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed!`)
+      }
+      setFileAlreadyUnderLimit(true)
+      return
+    }
+
+    // Check file type and show warnings for files that need compression but can't be compressed
+    if (file.type.startsWith('video/')) {
+      setError(`Video compression is not yet implemented. Your ${fileSizeMB} MB video cannot be compressed to ${targetSizeMB} MB. Please use image or GIF files for now. Video support coming soon!`)
+    } else if (file.type === 'image/gif') {
+      // For GIF files, calculate compression ratio and show quality warning upfront
+      const compressionRatioNeeded = 1 - (targetSizeBytes / file.size)
+      if (compressionRatioNeeded > 0.7) {
+        // Show quality warning immediately for high compression ratios
+        setPendingResult({
+          file,
+          wasCompressed: false,
+          qualityRatio: compressionRatioNeeded,
+          iterations: 0,
+          warning: `This GIF requires ${(compressionRatioNeeded * 100).toFixed(1)}% size reduction to reach ${targetSizeMB} MB. High compression ratios may significantly affect animation quality.`
+        })
+        setShowQualityWarning(true)
       }
     }
   }
 
   const handleCompressionComplete = (result: CompressionResult) => {
-    console.log('[CompressorTool] handleCompressionComplete called', { 
+    console.log('[CompressorTool] handleCompressionComplete called', {
       wasCompressed: result.wasCompressed,
       warning: result.warning,
       fileSize: result.file.size
     })
-    
+
+    // If no compression was needed (file already under target size), just show message briefly
+    if (!result.wasCompressed && result.warning?.includes('already under')) {
+      setIsCompressing(false)
+      // Show a brief success message instead of error
+      setError(result.warning)
+      // Clear the message after 3 seconds
+      setTimeout(() => setError(null), 3000)
+      return
+    }
+
     // Check if this is an actual error (can't compress) vs info (already under limit)
     const isActualError = result.warning && (
       result.warning.includes('not yet implemented') ||
       result.warning.includes('compression failed') ||
       result.warning.includes('Unsupported')
     )
-    
+
     if (isActualError) {
       setIsCompressing(false)
       setError(result.warning!)
       return
     }
-    
+
     const qualityRatio = result.qualityRatio
 
-    // Show quality warning for high compression ratios
-    if (qualityRatio > 0.7 && !result.warning?.includes('Unable to reach')) {
+    // Show quality warning for high compression ratios (but not for GIFs where we already warned upfront)
+    const isGifFile = selectedFile?.type === 'image/gif'
+    const alreadyWarnedForGif = isGifFile && qualityRatio > 0.7
+
+    if (qualityRatio > 0.7 && !result.warning?.includes('Unable to reach') && !alreadyWarnedForGif) {
       setPendingResult(result)
       setShowQualityWarning(true)
       setIsCompressing(false)
+    } else if (result.warning?.includes('Unable to reach')) {
+      // Show warning about unable to reach target size, but still allow download
+      setError(result.warning)
+      finalizeCompression(result)
     } else {
-      // File was compressed, or already under target size - show success
+      // File was compressed successfully - show success
       finalizeCompression(result)
     }
   }
@@ -195,13 +244,12 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
     }
   }
 
-  const compressFile = () => {
+  const compressFile = async () => {
     console.log('[CompressorTool] compressFile called')
     console.log('[CompressorTool] selectedFile:', selectedFile)
-    console.log('[CompressorTool] workerRef.current:', workerRef.current)
-    
-    if (!selectedFile || !workerRef.current) {
-      console.warn('[CompressorTool] Missing file or worker')
+
+    if (!selectedFile) {
+      console.warn('[CompressorTool] Missing file')
       return
     }
 
@@ -210,6 +258,36 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
     setError(null)
 
     const targetSizeBytes = SIZE_LIMITS[targetSize as keyof typeof SIZE_LIMITS]
+
+    // Handle GIF files on main thread (gifsicle-wasm-browser needs DOM access)
+    if (selectedFile.type === 'image/gif') {
+      console.log('[CompressorTool] Compressing GIF on main thread')
+
+      try {
+        const result = await compressGIF(selectedFile, {
+          targetSizeBytes,
+          onProgress: (progress) => {
+            console.log('[CompressorTool] GIF compression progress:', progress)
+            setProgress(progress)
+          }
+        })
+
+        console.log('[CompressorTool] GIF compression complete:', result)
+        setProgress(100)
+        handleCompressionComplete(result)
+      } catch (error) {
+        console.error('[CompressorTool] GIF compression failed:', error)
+        setIsCompressing(false)
+        setError('GIF compression failed. Please try again.')
+      }
+      return
+    }
+
+    // Handle other file types with worker
+    if (!workerRef.current) {
+      console.warn('[CompressorTool] Missing worker for non-GIF file')
+      return
+    }
 
     const message: WorkerRequest = {
       type: 'compress',
@@ -223,13 +301,22 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
       fileSize: selectedFile.size,
       targetSizeBytes
     })
-    
+
     workerRef.current.postMessage(message)
   }
 
   const handleQualityWarningProceed = () => {
     if (pendingResult) {
-      finalizeCompression(pendingResult)
+      // Check if we have a compressed result (after compression) or just a prediction (before compression)
+      if (pendingResult.wasCompressed) {
+        // After compression: finalize the result
+        finalizeCompression(pendingResult)
+      } else {
+        // Before compression: start the compression process
+        setShowQualityWarning(false)
+        setPendingResult(null)
+        compressFile()
+      }
     }
   }
 
@@ -237,6 +324,13 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
     setShowQualityWarning(false)
     setPendingResult(null)
     setIsCompressing(false)
+    // Clear the selected file when user cancels quality warning
+    setSelectedFile(null)
+    setCompressedFile(null)
+    setProgress(0)
+    setError(null)
+    setFileAlreadyUnderLimit(false)
+    setShouldClearFile(true)
   }
 
   return (
@@ -294,6 +388,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
             <FileUploader
               onFileSelect={handleFileSelect}
               maxSize={MAX_UPLOAD_SIZE}
+              shouldClearFile={shouldClearFile}
             />
 
             {error && (() => {
@@ -360,7 +455,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
                 >
                   <Button
                     onClick={compressFile}
-                    disabled={isCompressing || (error !== null && (error.includes('not yet implemented') || error.includes('cannot be compressed')))}
+                    disabled={isCompressing || fileAlreadyUnderLimit || (error !== null && (error.includes('not yet implemented') || error.includes('cannot be compressed')))}
                     className="w-full relative overflow-hidden"
                     size="lg"
                   >
@@ -542,22 +637,13 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
                         a.download = `compressed_${compressedFile.originalName}`
                         a.click()
                       }}
-                      className="w-full relative overflow-hidden"
+                      className="w-full"
                       size="lg"
                     >
-                      <motion.div
-                        className="absolute inset-0 bg-primary opacity-0"
-                        animate={{ opacity: [0, 0.3, 0] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                      />
-                      <motion.span
-                        className="relative z-10 flex items-center justify-center gap-2"
-                        animate={{ x: [0, 2, 0] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                      >
+                      <span className="flex items-center justify-center gap-2">
                         <Download className="h-5 w-5" />
-                        DOWNLOAD FILE
-                      </motion.span>
+                        <ScrambleText text="DOWNLOAD FILE" delay={0} />
+                      </span>
                     </Button>
                   </motion.div>
                 </motion.div>

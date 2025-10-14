@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import { Button } from './ui/button'
 import { AlertTriangle } from 'lucide-react'
 import { ScrambleText } from './ScrambleText'
@@ -18,18 +19,39 @@ export function QualityWarningModal({
   onProceed,
   onCancel
 }: QualityWarningModalProps) {
-  return (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
+          <style dangerouslySetInnerHTML={{
+            __html: `
+              .scan-line, .noise {
+                display: none !important;
+              }
+            `
+          }} />
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+            className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/80 backdrop-blur-sm"
+            style={{
+              zIndex: 99999,
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              margin: 0,
+              padding: 0,
+              border: 'none',
+              outline: 'none'
+            }}
             onClick={onCancel}
           />
-          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 100000 }}>
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -47,7 +69,7 @@ export function QualityWarningModal({
               <div className="relative z-10 space-y-4">
                 <div className="flex items-center gap-3">
                   <motion.div
-                    animate={{ 
+                    animate={{
                       rotate: [0, -10, 10, -10, 0],
                       scale: [1, 1.1, 1]
                     }}
@@ -56,10 +78,10 @@ export function QualityWarningModal({
                     <AlertTriangle className="h-8 w-8 text-yellow-500" />
                   </motion.div>
                   <h2 className="text-xl font-bold uppercase tracking-wider">
-                    <ScrambleText 
-                      text="QUALITY WARNING" 
-                      delay={0} 
-                      scrambleSpeed={15} 
+                    <ScrambleText
+                      text="QUALITY WARNING"
+                      delay={0}
+                      scrambleSpeed={15}
                       revealSpeed={30}
                     />
                   </h2>
@@ -124,7 +146,8 @@ export function QualityWarningModal({
           </div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
 
