@@ -7,9 +7,10 @@ interface FileUploaderProps {
   onFileSelect: (file: File) => void
   maxSize?: number
   shouldClearFile?: boolean
+  onFileClear?: () => void
 }
 
-export function FileUploader({ onFileSelect, maxSize, shouldClearFile }: FileUploaderProps) {
+export function FileUploader({ onFileSelect, maxSize, shouldClearFile, onFileClear }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -66,6 +67,7 @@ export function FileUploader({ onFileSelect, maxSize, shouldClearFile }: FileUpl
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
+    onFileClear?.()
   }
 
   return (

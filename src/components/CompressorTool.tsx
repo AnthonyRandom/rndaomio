@@ -164,6 +164,15 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
     }
   }
 
+  const handleFileClear = () => {
+    setSelectedFile(null)
+    setCompressedFile(null)
+    setProgress(0)
+    setError(null)
+    setFileAlreadyUnderLimit(false)
+    setShouldClearFile(false)
+  }
+
   const handleCompressionComplete = (result: CompressionResult) => {
     console.log('[CompressorTool] handleCompressionComplete called', {
       wasCompressed: result.wasCompressed,
@@ -389,6 +398,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
               onFileSelect={handleFileSelect}
               maxSize={MAX_UPLOAD_SIZE}
               shouldClearFile={shouldClearFile}
+              onFileClear={handleFileClear}
             />
 
             {error && (() => {
