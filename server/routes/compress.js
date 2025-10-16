@@ -85,6 +85,10 @@ router.post('/compress', upload.single('file'), async (req, res) => {
       res.setHeader('X-Bitrate', result.bitrate.toString());
     }
 
+    if (result.audioMuted !== undefined) {
+      res.setHeader('X-Audio-Muted', result.audioMuted.toString());
+    }
+
     res.send(result.buffer);
 
     // Cleanup temp file

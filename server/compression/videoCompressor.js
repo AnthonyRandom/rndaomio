@@ -45,17 +45,28 @@ async function compressVideo(filePath, targetSizeBytes) {
 
   // Calculate reduction ratio and smart initial guess
   const reductionRatio = actualTarget / originalSize;
-  const audioBitrate = 128; // Fixed audio bitrate in kbps
-  const targetTotalBitrate = Math.floor((targetSizeMB * 8 * 1024) / duration); // Total bitrate including audio
-  const targetVideoBitrate = Math.max(50, targetTotalBitrate - audioBitrate); // Video bitrate only
+  // ===== Dynamic audio re-encode ===== //
+  const targetTotalBitrate = Math.floor((targetSizeMB * 8 * 1024) / duration); // total kbps budget
+
+  // Choose audio bitrate on a ladder: 32 → 16 → 12 → 8 → mute
+  let desiredAudioBitrate;
+  if (targetTotalBitrate < 40) {
+    desiredAudioBitrate = 0;          // mute — budget too small for usable audio
+  } else if (targetTotalBitrate < 80) {
+    desiredAudioBitrate = 24;         // new floor: 24 kb/s mono (AAC-LC)
+  } else {
+    desiredAudioBitrate = Math.min(32, Math.floor(targetTotalBitrate * 0.25)); // 24–32 kb/s range
+  }
+
+  const targetVideoBitrate = Math.max(8, targetTotalBitrate - desiredAudioBitrate);
   
   // Allow very low minimums for long videos or small targets
-  let minBitrate = Math.max(50, Math.floor(targetVideoBitrate * 0.5)); // Start closer to target but not below 50kbps
+  let minBitrate = Math.max(8, Math.floor(targetVideoBitrate * 0.5)); // Start closer to target but not below 8 kbps
   let maxBitrate = originalBitrate;
   
   const startBitrate = Math.max(minBitrate, Math.min(maxBitrate, targetVideoBitrate));
 
-  console.log(`[VideoCompressor] Original bitrate: ${originalBitrate}kbps, Target total: ${targetTotalBitrate}kbps (video: ${targetVideoBitrate}kbps + audio: ${audioBitrate}kbps), Initial guess: ${startBitrate}kbps`);
+  console.log(`[VideoCompressor] Original bitrate: ${originalBitrate}kbps, Target total: ${targetTotalBitrate}kbps (video: ${targetVideoBitrate}kbps + audio: ${desiredAudioBitrate}kbps), Initial guess: ${startBitrate}kbps`);
 
   // Try compression with current resolution
   let result = await binarySearchBitrate(
@@ -69,7 +80,8 @@ async function compressVideo(filePath, targetSizeBytes) {
     height,
     originalSize,
     targetVideoBitrate,
-    reductionRatio
+    reductionRatio,
+    desiredAudioBitrate
   );
 
   // If couldn't reach target with bitrate alone, try reducing resolution
@@ -86,7 +98,7 @@ async function compressVideo(filePath, targetSizeBytes) {
       // Recalculate bitrate range for new resolution
       const resolutionRatio = (resolution.height * resolution.height) / (height * height);
       maxBitrate = Math.floor(originalBitrate * resolutionRatio);
-      minBitrate = Math.max(200, Math.floor(targetVideoBitrate * 0.7));
+      minBitrate = Math.max(8, Math.floor(targetVideoBitrate * 0.7));
       const newStartBitrate = Math.max(minBitrate, Math.min(maxBitrate, Math.floor(targetVideoBitrate)));
 
       const newWidth = Math.floor(width * (resolution.height / height));
@@ -102,7 +114,8 @@ async function compressVideo(filePath, targetSizeBytes) {
         resolution.height,
         originalSize,
         targetVideoBitrate,
-        reductionRatio
+        reductionRatio,
+        desiredAudioBitrate
       );
 
       if (result.bestBitrate !== null) {
@@ -135,7 +148,8 @@ async function compressVideo(filePath, targetSizeBytes) {
     originalSize,
     compressedSize: result.bestSize,
     wasCompressed: true,
-    bitrate: result.bestBitrate
+    bitrate: result.bestBitrate,
+    audioMuted: desiredAudioBitrate === 0
   };
 }
 
@@ -150,7 +164,8 @@ async function binarySearchBitrate(
   height,
   originalSize,
   targetBitrate,
-  reductionRatio
+  reductionRatio,
+  audioBitrate
 ) {
   const reductionNeeded = 1 - (targetSize / originalSize);
   console.log(`[VideoCompressor] Need ${(reductionNeeded * 100).toFixed(1)}% size reduction`);
@@ -172,7 +187,8 @@ async function binarySearchBitrate(
       tempPath1,
       currentBitrate,
       width,
-      height
+      height,
+      audioBitrate
     );
 
     console.log(`[VideoCompressor] Bitrate ${currentBitrate}kbps: ${compressedSize} bytes`);
@@ -285,7 +301,8 @@ async function binarySearchBitrate(
         tempPath,
         currentBitrate,
         width,
-        height
+        height,
+        audioBitrate
       ));
 
       console.log(`[VideoCompressor] Bitrate ${currentBitrate}kbps: ${compressedSize} bytes`);
@@ -326,7 +343,8 @@ async function binarySearchBitrate(
               tempPathFinal,
               currentBitrate,
               width,
-              height
+              height,
+              audioBitrate
             ));
 
             console.log(`[VideoCompressor] Bitrate ${currentBitrate}kbps: ${compressedSize} bytes`);
@@ -385,20 +403,29 @@ async function getVideoMetadata(filePath) {
   });
 }
 
-async function encodeVideo(inputPath, outputPath, bitrate, width, height) {
+async function encodeVideo(inputPath, outputPath, bitrate, width, height, audioBitrate) {
   return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
+    const cmd = ffmpeg(inputPath)
       .videoCodec('libx264')
       .videoBitrate(`${bitrate}k`)
-      .size(`${width}x${height}`)
-      .audioCodec('aac')
-      .audioBitrate('128k')
-      .outputOptions([
-        '-preset fast',
-        '-movflags +faststart'
-      ])
-      .output(outputPath)
-      .on('end', () => {
+      .size(`${width}x${height}`);
+
+    if (audioBitrate && audioBitrate > 0) {
+      cmd
+        .audioCodec('aac')
+        .audioBitrate(`${audioBitrate}k`)
+        .audioChannels(audioBitrate <= 24 ? 1 : 2)
+        .audioFrequency(audioBitrate <= 24 ? 22050 : 44100);
+    } else {
+      cmd.noAudio();
+    }
+
+    cmd.outputOptions([
+      '-preset fast',
+      '-movflags +faststart'
+    ])
+    .output(outputPath)
+    .on('end', () => {
         try {
           const buffer = fs.readFileSync(outputPath);
           const size = buffer.length;

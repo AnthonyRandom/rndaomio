@@ -361,6 +361,8 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
             const originalSize = parseInt(xhr.getResponseHeader('X-Original-Size') || '0')
             const compressedSize = parseInt(xhr.getResponseHeader('X-Compressed-Size') || '0')
             const wasCompressed = xhr.getResponseHeader('X-Was-Compressed') === 'true'
+            const audioMutedHeader = xhr.getResponseHeader('X-Audio-Muted')
+            const audioMuted = audioMutedHeader && audioMutedHeader === 'true'
 
             let filename = selectedFile.name
             if (contentDisposition) {
@@ -384,7 +386,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
               wasCompressed,
               qualityRatio: 0,
               iterations: 0,
-              warning: undefined
+              warning: audioMuted ? 'The audio track was muted to meet the target size.' : undefined
             }
 
             handleCompressionComplete(result)
