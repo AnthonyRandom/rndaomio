@@ -27,7 +27,7 @@ const SIZE_LIMITS = {
   '500MB': 500 * 1024 * 1024,
 }
 
-const MAX_UPLOAD_SIZE = 2000 * 1024 * 1024
+const MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 
 const UPLOAD_QUIPS = [
   'UPLOADING FILE',

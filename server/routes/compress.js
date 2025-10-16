@@ -12,7 +12,7 @@ const router = express.Router();
 // Configure multer for memory storage
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2000 * 1024 * 1024 }, // 2GB max
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max - reasonable limit for file compression
   fileFilter: (req, file, cb) => {
     const allowedImageTypes = [
       'image/jpeg',
@@ -64,16 +64,46 @@ const upload = multer({
 
 router.post('/compress', upload.single('file'), async (req, res) => {
   const tmpFilePath = path.join(__dirname, '../tmp', `temp-${Date.now()}`);
-  
+
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    // Server-side validation
+    const filename = req.file.originalname;
+    if (!filename || filename.trim() === '') {
+      return res.status(400).json({ error: 'Invalid file name' });
+    }
+
+    // Check for suspicious characters in filename
+    const suspiciousChars = /[<>:"|?*\x00-\x1f]/;
+    if (suspiciousChars.test(filename)) {
+      return res.status(400).json({ error: 'File name contains invalid characters' });
+    }
+
+    // Check filename length
+    if (filename.length > 255) {
+      return res.status(400).json({ error: 'File name is too long' });
+    }
+
     const { targetSizeBytes } = req.body;
+    if (!targetSizeBytes || isNaN(parseInt(targetSizeBytes))) {
+      return res.status(400).json({ error: 'Invalid target size' });
+    }
+
     const targetSize = parseInt(targetSizeBytes);
     const originalSize = req.file.buffer.length;
     const mimetype = req.file.mimetype;
+
+    // Validate file size
+    if (originalSize === 0) {
+      return res.status(400).json({ error: 'File is empty' });
+    }
+
+    if (originalSize > 500 * 1024 * 1024) { // 500MB
+      return res.status(400).json({ error: 'File size exceeds maximum allowed limit (500MB)' });
+    }
 
     console.log(`[Server] Processing: ${req.file.originalname} (${originalSize} bytes, target: ${targetSize} bytes)`);
 
@@ -138,7 +168,7 @@ router.post('/compress', upload.single('file'), async (req, res) => {
     }, 1000);
 
   } catch (error) {
-    console.error('[Server] Error:', error);
+    console.error('[Server] Error processing file:', error.message);
 
     // Cleanup on error
     try {
@@ -149,9 +179,12 @@ router.post('/compress', upload.single('file'), async (req, res) => {
       console.warn('[Server] Cleanup failed:', err.message);
     }
 
+    // Don't expose internal error details to client
+    const isDevelopment = process.env.NODE_ENV === 'development';
     res.status(500).json({
-      error: error.message || 'Server error',
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: 'File processing failed. Please check your file and try again.',
+      details: isDevelopment ? error.message : undefined,
+      stack: isDevelopment ? error.stack : undefined
     });
   }
 });

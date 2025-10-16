@@ -81,12 +81,52 @@ export interface ValidationResult {
 }
 
 export async function validateFile(file: File): Promise<ValidationResult> {
+  // Basic file name validation
+  if (!file.name || file.name.trim() === '') {
+    return {
+      isValid: false,
+      error: 'File name is required.'
+    }
+  }
+
+  // Check for suspicious characters in filename
+  const suspiciousChars = /[<>:"|?*\x00-\x1f]/;
+  if (suspiciousChars.test(file.name)) {
+    return {
+      isValid: false,
+      error: 'File name contains invalid characters.'
+    }
+  }
+
+  // Check filename length
+  if (file.name.length > 255) {
+    return {
+      isValid: false,
+      error: 'File name is too long.'
+    }
+  }
+
   const fileExtension = file.name.split('.').pop()?.toLowerCase() || ''
-  
+
   if (BLOCKED_EXTENSIONS.includes(fileExtension)) {
     return {
       isValid: false,
       error: `File type ".${fileExtension}" is not allowed for security reasons.`
+    }
+  }
+
+  // Additional size check (client-side validation)
+  if (file.size === 0) {
+    return {
+      isValid: false,
+      error: 'File is empty.'
+    }
+  }
+
+  if (file.size > 500 * 1024 * 1024) { // 500MB
+    return {
+      isValid: false,
+      error: 'File size exceeds the maximum allowed limit (500MB).'
     }
   }
 
