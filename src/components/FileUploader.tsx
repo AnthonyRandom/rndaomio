@@ -88,7 +88,7 @@ export function FileUploader({ onFileSelect, maxSize, shouldClearFile, onFileCle
           type="file"
           className="hidden"
           onChange={handleFileInput}
-          accept="image/*,video/*,.gif"
+          accept=".jpg,.jpeg,.png,.webp,.avif,.tiff,.tif,.gif,.mp4,.mov,.avi,.webm,.mkv"
         />
         
         <div

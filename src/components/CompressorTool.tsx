@@ -9,9 +9,14 @@ import { QualityWarningModal } from './QualityWarningModal'
 import { Download, Zap, CheckCircle2, AlertCircle, Info } from 'lucide-react'
 import { formatBytes, generateId, formatFileSizeMB, getTargetSizeMB, isFileAlreadyUnderLimit } from '@/lib/utils'
 import { ANIMATION_DURATIONS, SPRING_CONFIGS } from '@/lib/animationConstants'
-import type { WorkerRequest, WorkerResponse } from '@/lib/compressionWorker'
-import type { CompressionResult } from '@/lib/compression'
-import { compressGIF } from '@/lib/compression'
+
+interface CompressionResult {
+  file: File
+  wasCompressed: boolean
+  qualityRatio: number
+  iterations: number
+  warning?: string
+}
 
 const SIZE_LIMITS = {
   '10MB': 10 * 1024 * 1024,
@@ -20,6 +25,43 @@ const SIZE_LIMITS = {
 }
 
 const MAX_UPLOAD_SIZE = 2000 * 1024 * 1024
+
+const UPLOAD_QUIPS = [
+  'UPLOADING FILE',
+  'TRANSFERRING DATA',
+  'SENDING TO SERVER',
+  'PREPARING FILE',
+]
+
+const COMPRESSION_QUIPS = [
+  'SQUEEZING PIXELS',
+  'NEGOTIATING WITH BYTES',
+  'APPLYING COMPRESSION MAGIC',
+  'OPTIMIZING QUALITY',
+  'FINDING THE SWEET SPOT',
+  'BINARY SEARCH IN PROGRESS',
+  'TESTING COMPRESSION LEVELS',
+  'CALCULATING OPTIMAL QUALITY',
+  'SHRINKING RESPONSIBLY',
+  'REDUCING FILE SIZE',
+  'ANALYZING COMPRESSION RATIO',
+  'BALANCING QUALITY VS SIZE',
+  'RUNNING LOSSY ALGORITHMS',
+  'EXTRAPOLATING RESULTS',
+  'ADJUSTING PARAMETERS',
+  'COMPRESSING FRAMES',
+  'OPTIMIZING COLOR PALETTE',
+  'MINIMIZING REDUNDANCY',
+]
+
+const FINISHING_QUIPS = [
+  'ALMOST THERE',
+  'FINALIZING COMPRESSION',
+  'WRAPPING UP',
+  'FINAL TOUCHES',
+  'PACKAGING RESULTS',
+  'PREPARING DOWNLOAD',
+]
 
 interface CompressedFile {
   id: string
@@ -46,49 +88,20 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
   const [pendingResult, setPendingResult] = useState<CompressionResult | null>(null)
   const [fileAlreadyUnderLimit, setFileAlreadyUnderLimit] = useState(false)
   const [shouldClearFile, setShouldClearFile] = useState(false)
+  const [compressionMessage, setCompressionMessage] = useState('COMPRESSING')
   
-  const workerRef = useRef<Worker | null>(null)
   const compressedBlobRef = useRef<string | null>(null)
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const quipIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Cleanup intervals on unmount
   useEffect(() => {
-    console.log('[CompressorTool] Initializing worker...')
-    try {
-      workerRef.current = new Worker(
-        new URL('../lib/compressionWorker.ts', import.meta.url),
-        { type: 'module' }
-      )
-
-      workerRef.current.onmessage = (event: MessageEvent<WorkerResponse>) => {
-        console.log('[CompressorTool] Worker message:', event.data)
-        const { type, progress: workerProgress, result, error: workerError } = event.data
-
-        if (type === 'progress' && workerProgress !== undefined) {
-          setProgress(workerProgress)
-        } else if (type === 'complete' && result) {
-          handleCompressionComplete(result)
-        } else if (type === 'error' || type === 'validation_error') {
-          setIsCompressing(false)
-          setError(workerError || 'Compression failed')
-        }
-      }
-
-      workerRef.current.onerror = (error) => {
-        console.error('[CompressorTool] Worker error:', error)
-        setIsCompressing(false)
-        setError(`Worker error: ${error.message}`)
-      }
-
-      console.log('[CompressorTool] Worker initialized successfully')
-    } catch (error) {
-      console.error('[CompressorTool] Failed to initialize worker:', error)
-      setError(`Failed to initialize compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-
     return () => {
-      console.log('[CompressorTool] Cleaning up worker')
-      workerRef.current?.terminate()
-      if (compressedBlobRef.current) {
-        URL.revokeObjectURL(compressedBlobRef.current)
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current)
+      }
+      if (quipIntervalRef.current) {
+        clearInterval(quipIntervalRef.current)
       }
     }
   }, [])
@@ -111,11 +124,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
       } else {
         // File needs compression
         setFileAlreadyUnderLimit(false)
-        if (selectedFile.type.startsWith('video/')) {
-          setError(`Video compression is not yet implemented. Your ${fileSizeMB} MB video cannot be compressed to ${targetSizeMB} MB. Please use image or GIF files for now. Video support coming soon!`)
-        } else {
-          setError(null)
-        }
+        setError(null)
       }
     }
   }, [targetSize, selectedFile, isCompressing, compressedFile])
@@ -145,24 +154,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
       return
     }
 
-    // Check file type and show warnings for files that need compression but can't be compressed
-    if (file.type.startsWith('video/')) {
-      setError(`Video compression is not yet implemented. Your ${fileSizeMB} MB video cannot be compressed to ${targetSizeMB} MB. Please use image or GIF files for now. Video support coming soon!`)
-    } else if (file.type === 'image/gif') {
-      // For GIF files, calculate compression ratio and show quality warning upfront
-      const compressionRatioNeeded = 1 - (targetSizeBytes / file.size)
-      if (compressionRatioNeeded > 0.7) {
-        // Show quality warning immediately for high compression ratios
-        setPendingResult({
-          file,
-          wasCompressed: false,
-          qualityRatio: compressionRatioNeeded,
-          iterations: 0,
-          warning: `This GIF requires ${(compressionRatioNeeded * 100).toFixed(1)}% size reduction to reach ${targetSizeMB} MB. High compression ratios may significantly affect animation quality.`
-        })
-        setShowQualityWarning(true)
-      }
-    }
+    // All supported file types (images, GIFs, videos) are now handled by the server
   }
 
   const handleFileClear = () => {
@@ -206,11 +198,8 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
 
     const qualityRatio = result.qualityRatio
 
-    // Show quality warning for high compression ratios (but not for GIFs where we already warned upfront)
-    const isGifFile = selectedFile?.type === 'image/gif'
-    const alreadyWarnedForGif = isGifFile && qualityRatio > 0.7
-
-    if (qualityRatio > 0.7 && !result.warning?.includes('Unable to reach') && !alreadyWarnedForGif) {
+    // Show quality warning for high compression ratios
+    if (qualityRatio > 0.7 && !result.warning?.includes('Unable to reach')) {
       setPendingResult(result)
       setShowQualityWarning(true)
       setIsCompressing(false)
@@ -264,55 +253,193 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
     }
 
     setIsCompressing(true)
-    setProgress(0)
+    setProgress(1)
     setError(null)
-
+    
     const targetSizeBytes = SIZE_LIMITS[targetSize as keyof typeof SIZE_LIMITS]
+    let currentProgress = 1
+    let currentPhase: 'upload' | 'compression' | 'finishing' = 'upload'
+    let isComplete = false
+    
+    // Detect if file is a GIF or video for slower progress
+    const isGif = selectedFile.type === 'image/gif'
+    const isVideo = selectedFile.type.startsWith('video/')
 
-    // Handle GIF files on main thread (gifsicle-wasm-browser needs DOM access)
-    if (selectedFile.type === 'image/gif') {
-      console.log('[CompressorTool] Compressing GIF on main thread')
+    // Helper to get current quips based on phase
+    const getCurrentQuips = () => {
+      if (currentPhase === 'upload') return UPLOAD_QUIPS
+      if (currentPhase === 'compression') return COMPRESSION_QUIPS
+      return FINISHING_QUIPS
+    }
 
-      try {
-        const result = await compressGIF(selectedFile, {
-          targetSizeBytes,
-          onProgress: (progress) => {
-            console.log('[CompressorTool] GIF compression progress:', progress)
-            setProgress(progress)
-          }
-        })
+    // Start with upload quips
+    let quipIndex = 0
+    let finishingQuipsSeen = 0
+    setCompressionMessage(UPLOAD_QUIPS[0])
 
-        console.log('[CompressorTool] GIF compression complete:', result)
-        setProgress(100)
-        handleCompressionComplete(result)
-      } catch (error) {
-        console.error('[CompressorTool] GIF compression failed:', error)
-        setIsCompressing(false)
-        setError('GIF compression failed. Please try again.')
+    // Rotate quips every 3 seconds
+    quipIntervalRef.current = setInterval(() => {
+      const quips = getCurrentQuips()
+      
+      // For finishing phase, stop rotating after showing all quips once
+      if (currentPhase === 'finishing') {
+        if (finishingQuipsSeen >= quips.length - 1) {
+          // Keep showing the last quip
+          setCompressionMessage(quips[quips.length - 1])
+          return
+        }
+        finishingQuipsSeen++
+        quipIndex = finishingQuipsSeen
+        setCompressionMessage(quips[quipIndex])
+      } else {
+        // Normal rotation for upload and compression phases
+        quipIndex = (quipIndex + 1) % quips.length
+        setCompressionMessage(quips[quipIndex])
       }
-      return
+    }, 3000)
+
+    // Faux progress simulation - slower for GIFs and videos
+    const progressSpeed = (isGif || isVideo) ? 800 : 300 // GIFs/videos get 800ms interval vs 300ms for images
+    const compressionIncrement = (isGif || isVideo) ? 0.3 : 1.5 // Much slower increment for GIFs/videos
+    
+    progressIntervalRef.current = setInterval(() => {
+      if (isComplete) return
+
+      if (currentProgress < 15) {
+        // Upload phase (1-15%)
+        currentProgress += Math.random() * 2 + 0.5
+        if (currentProgress >= 15) {
+          currentPhase = 'compression'
+          quipIndex = 0
+          finishingQuipsSeen = 0
+        }
+      } else if (currentProgress < 85) {
+        // Compression phase (15-85%)
+        currentProgress += Math.random() * compressionIncrement + 0.3
+        if (currentProgress >= 85) {
+          currentPhase = 'finishing'
+          quipIndex = 0
+          finishingQuipsSeen = 0
+        }
+      } else if (currentProgress < 99) {
+        // Finishing phase (85-99%)
+        currentProgress += Math.random() * 0.5 + 0.1
+      }
+
+      // Cap at 99%
+      if (currentProgress > 99) currentProgress = 99
+      
+      setProgress(Math.floor(currentProgress))
+    }, progressSpeed)
+
+    try {
+      console.log('[CompressorTool] Uploading file to server...')
+
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+      formData.append('targetSizeBytes', targetSizeBytes.toString())
+
+      const xhr = new XMLHttpRequest()
+
+      xhr.addEventListener('load', async () => {
+        isComplete = true
+
+        // Clear intervals
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+          progressIntervalRef.current = null
+        }
+        if (quipIntervalRef.current) {
+          clearInterval(quipIntervalRef.current)
+          quipIntervalRef.current = null
+        }
+
+        if (xhr.status === 200) {
+          try {
+            const responseBlob = xhr.response
+            const contentDisposition = xhr.getResponseHeader('Content-Disposition')
+            const originalSize = parseInt(xhr.getResponseHeader('X-Original-Size') || '0')
+            const compressedSize = parseInt(xhr.getResponseHeader('X-Compressed-Size') || '0')
+            const wasCompressed = xhr.getResponseHeader('X-Was-Compressed') === 'true'
+
+            let filename = selectedFile.name
+            if (contentDisposition) {
+              const filenameMatch = contentDisposition.match(/filename="(.+?)"/)
+              if (filenameMatch) {
+                filename = filenameMatch[1]
+              }
+            }
+
+            console.log('[CompressorTool] Processing complete:', {
+              originalSize,
+              compressedSize,
+              wasCompressed
+            })
+
+            // Jump to 100%
+            setProgress(100)
+
+            const result: CompressionResult = {
+              file: new File([responseBlob], filename, { type: selectedFile.type }),
+              wasCompressed,
+              qualityRatio: 0,
+              iterations: 0,
+              warning: undefined
+            }
+
+            handleCompressionComplete(result)
+          } catch (parseError) {
+            console.error('[CompressorTool] Failed to parse response:', parseError)
+            setIsCompressing(false)
+            setError('Failed to process server response')
+          }
+        } else {
+          try {
+            const errorData = JSON.parse(xhr.responseText)
+            setIsCompressing(false)
+            setError(errorData.error || 'Upload failed')
+          } catch {
+            setIsCompressing(false)
+            setError(`Upload failed with status ${xhr.status}`)
+          }
+        }
+      })
+
+      xhr.addEventListener('error', () => {
+        console.error('[CompressorTool] Upload error')
+        isComplete = true
+        
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+          progressIntervalRef.current = null
+        }
+        if (quipIntervalRef.current) {
+          clearInterval(quipIntervalRef.current)
+          quipIntervalRef.current = null
+        }
+        setIsCompressing(false)
+        setError('Network error. Please check if the server is running.')
+      })
+
+      xhr.open('POST', '/api/compress')
+      xhr.responseType = 'blob'
+      xhr.send(formData)
+
+    } catch (error) {
+      console.error('[CompressorTool] Upload failed:', error)
+      isComplete = true
+      
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current)
+        progressIntervalRef.current = null
+      }
+      if (quipIntervalRef.current) {
+        clearInterval(quipIntervalRef.current)
+        quipIntervalRef.current = null
+      }
+      setIsCompressing(false)
+      setError('Upload failed. Please try again.')
     }
-
-    // Handle other file types with worker
-    if (!workerRef.current) {
-      console.warn('[CompressorTool] Missing worker for non-GIF file')
-      return
-    }
-
-    const message: WorkerRequest = {
-      type: 'compress',
-      file: selectedFile,
-      targetSizeBytes,
-    }
-
-    console.log('[CompressorTool] Sending message to worker:', {
-      type: message.type,
-      fileName: selectedFile.name,
-      fileSize: selectedFile.size,
-      targetSizeBytes
-    })
-
-    workerRef.current.postMessage(message)
   }
 
   const handleQualityWarningProceed = () => {
@@ -504,10 +631,13 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
               >
                 <div className="flex justify-between text-sm font-bold uppercase">
                   <motion.span
-                    animate={{ opacity: [1, 0.6, 1] }}
-                    transition={{ duration: ANIMATION_DURATIONS.normal, repeat: Infinity }}
+                    key={compressionMessage}
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 5 }}
+                    transition={{ duration: 0.3 }}
                   >
-                    COMPRESSING
+                    {compressionMessage}
                   </motion.span>
                   <motion.span
                     className="tabular-nums"

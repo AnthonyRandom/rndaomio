@@ -11,7 +11,11 @@ const BLOCKED_EXTENSIONS = [
   // DRM/Protected
   'm4p', 'vob',
   // Complex/Proprietary
-  'cr2', 'nef', 'arw', 'psd', 'ai', 'blend', 'fbx', 'obj', 'stl', 'indd'
+  'cr2', 'nef', 'arw', 'psd', 'ai', 'blend', 'fbx', 'obj', 'stl', 'indd',
+  // Documents
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+  // Audio
+  'mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'
 ]
 
 const BLOCKED_MIME_TYPES = [
@@ -25,21 +29,38 @@ const BLOCKED_MIME_TYPES = [
   'application/x-bzip2',
   'application/x-executable',
   'application/x-sharedlib',
-  'application/java-archive'
+  'application/java-archive',
+  // Documents
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  // Audio
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg'
 ]
 
 const ALLOWED_CATEGORIES = {
-  image: ['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/tiff'],
-  gif: ['image/gif'],
+  image: [
+    'image/jpeg', 
+    'image/png', 
+    'image/webp', 
+    'image/avif', 
+    'image/tiff',
+    'image/gif'
+  ],
   video: [
-    'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
-    'video/x-matroska', 'video/x-flv', 'video/mpeg', 'video/3gpp'
+    'video/mp4',
+    'video/quicktime',
+    'video/x-msvideo',
+    'video/webm',
+    'video/x-matroska'
   ]
 }
 
 export interface ValidationResult {
   isValid: boolean
-  category?: 'image' | 'gif' | 'video'
+  category?: 'image' | 'video'
   mimeType?: string
   error?: string
 }
@@ -78,7 +99,7 @@ export async function validateFile(file: File): Promise<ValidationResult> {
       if (mimeTypes.includes(fileType.mime)) {
         return {
           isValid: true,
-          category: category as 'image' | 'gif' | 'video',
+          category: category as 'image' | 'video',
           mimeType: fileType.mime
         }
       }
@@ -86,7 +107,7 @@ export async function validateFile(file: File): Promise<ValidationResult> {
 
     return {
       isValid: false,
-      error: `Unsupported file type "${fileType.mime}". Only images, GIFs, and videos are supported.`
+      error: `Unsupported file type "${fileType.mime}". Only images and videos are supported.`
     }
   } catch (error) {
     return {
@@ -99,7 +120,6 @@ export async function validateFile(file: File): Promise<ValidationResult> {
 export function formatFileType(category: string): string {
   const labels: Record<string, string> = {
     image: 'Image',
-    gif: 'GIF Animation',
     video: 'Video'
   }
   return labels[category] || 'Unknown'
