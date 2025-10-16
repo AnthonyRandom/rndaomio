@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compressionRoutes = require('./routes/compress');
+const downloadRoutes = require('./routes/download');
 const path = require('path');
 const fs = require('fs');
 
@@ -75,6 +76,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
 app.use('/api', compressionRoutes);
+app.use('/api', downloadRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

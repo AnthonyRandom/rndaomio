@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CompressorTool } from './components/CompressorTool'
+import { MediaDownloader } from './components/MediaDownloader'
 import { ScrambleText } from './components/ScrambleText'
-import { Terminal, Zap, FileCode, Image, Settings } from 'lucide-react'
+import { Terminal, Zap, FileCode, Image, Settings, Download } from 'lucide-react'
 
 function App() {
-  const [currentTool, setCurrentTool] = useState('compressor')
+  const [currentTool, setCurrentTool] = useState('downloader')
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
@@ -80,6 +81,7 @@ function App() {
                 
                 <nav className="p-2">
                   {[
+                    { id: 'downloader', label: 'Media Downloader', icon: Download, active: true },
                     { id: 'compressor', label: 'File Compressor', icon: Zap, active: true },
                     { id: 'converter', label: 'Format Converter', icon: FileCode, active: false },
                     { id: 'optimizer', label: 'Image Optimizer', icon: Image, active: false },
@@ -149,6 +151,7 @@ function App() {
             </aside>
 
             <main className="col-span-9">
+              {currentTool === 'downloader' && <MediaDownloader isLoaded={isLoaded} />}
               {currentTool === 'compressor' && <CompressorTool isLoaded={isLoaded} />}
             </main>
           </div>
