@@ -13,25 +13,37 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2000 * 1024 * 1024 }, // 2GB max
   fileFilter: (req, file, cb) => {
-    const allowedTypes = [
+    const allowedImageTypes = [
       'image/jpeg',
       'image/png',
       'image/webp',
       'image/avif',
       'image/tiff',
-      'image/gif',
-      'video/mp4',
-      'video/quicktime',
-      'video/x-msvideo',
-      'video/webm',
-      'video/x-matroska'
+      'image/gif'
     ];
 
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`Unsupported file type: ${file.mimetype}. Only images and videos are accepted.`), false);
+    const blockedVideoExt = [
+      '.mxf','.vob','.dv','.ogv','.rm','.rmvb','.f4v','.asf','.yuv','.braw','.r3d','.ari','.mlv','.crm','.cine'
+    ];
+
+    const ext = require('path').extname(file.originalname).toLowerCase();
+
+    if (allowedImageTypes.includes(file.mimetype)) {
+      return cb(null, true);
     }
+
+    if (file.mimetype.startsWith('video/')) {
+      if (blockedVideoExt.includes(ext)) {
+        return cb(new Error(`Video format ${ext} is not supported for compression.`), false);
+      }
+      // Allow listed video extensions
+      const allowedVideoExt = ['.mp4','.mov','.mkv','.avi','.flv','.webm','.ts','.mts','.m2ts','.wmv','.3gp'];
+      if (allowedVideoExt.includes(ext)) {
+        return cb(null, true);
+      }
+    }
+
+    cb(new Error(`Unsupported file type: ${file.originalname}`), false);
   }
 });
 

@@ -54,7 +54,12 @@ const ALLOWED_CATEGORIES = {
     'video/quicktime',
     'video/x-msvideo',
     'video/webm',
-    'video/x-matroska'
+    'video/x-matroska',
+    'video/x-flv',
+    'video/mp2t',
+    'video/x-ms-wmv',
+    'video/3gpp',
+    'video/3gpp2'
   ]
 }
 
