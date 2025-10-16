@@ -6,9 +6,12 @@ import { Progress } from './ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { ScrambleText } from './ScrambleText'
 import { QualityWarningModal } from './QualityWarningModal'
+import { InfoModal } from './InfoModal'
+import { ErrorModal } from './ErrorModal'
 import { Download, Zap, CheckCircle2, AlertCircle, Info } from 'lucide-react'
 import { formatBytes, generateId, formatFileSizeMB, getTargetSizeMB, isFileAlreadyUnderLimit } from '@/lib/utils'
 import { ANIMATION_DURATIONS, SPRING_CONFIGS } from '@/lib/animationConstants'
+import { validateFile } from '@/lib/fileValidator'
 
 interface CompressionResult {
   file: File
@@ -89,10 +92,57 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
   const [fileAlreadyUnderLimit, setFileAlreadyUnderLimit] = useState(false)
   const [shouldClearFile, setShouldClearFile] = useState(false)
   const [compressionMessage, setCompressionMessage] = useState('COMPRESSING')
+  const [validationError, setValidationError] = useState<{ isOpen: boolean; message: string }>({ 
+    isOpen: false, 
+    message: '' 
+  })
+  const [largeFileWarning, setLargeFileWarning] = useState<{ 
+    isOpen: boolean; 
+    file: File | null;
+    estimatedTime: string;
+  }>({ 
+    isOpen: false, 
+    file: null,
+    estimatedTime: ''
+  })
+  const [infoModal, setInfoModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'info' | 'audio-muted' | 'resolution-reduced';
+    details?: string[];
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+    details: []
+  })
   
   const compressedBlobRef = useRef<string | null>(null)
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const quipIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pendingFileRef = useRef<File | null>(null)
+  const [isServerOnline, setIsServerOnline] = useState(true)
+
+  // Check server connectivity on mount
+  useEffect(() => {
+    const checkServer = async () => {
+      try {
+        const response = await fetch('/health', { method: 'GET' })
+        setIsServerOnline(response.ok)
+      } catch {
+        setIsServerOnline(false)
+      }
+    }
+    
+    checkServer()
+    
+    // Check server every 30 seconds
+    const interval = setInterval(checkServer, 30000)
+    
+    return () => clearInterval(interval)
+  }, [])
 
   // Cleanup intervals on unmount
   useEffect(() => {
@@ -116,7 +166,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
       // Check if file is already under target size
       if (isFileAlreadyUnderLimit(selectedFile.size, targetSizeBytes)) {
         if (selectedFile.type.startsWith('video/')) {
-          setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed, but you can still download it.`)
+          setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed.`)
         } else {
           setError(`Your ${selectedFile.type.startsWith('image/gif') ? 'GIF' : 'image'} (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed!`)
         }
@@ -131,6 +181,51 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
 
   const handleFileSelect = async (file: File) => {
     console.log('[CompressorTool] File selected:', file.name, file.type, file.size)
+    
+    // Validate file type first
+    const validation = await validateFile(file)
+    if (!validation.isValid) {
+      setValidationError({
+        isOpen: true,
+        message: validation.error || 'File validation failed'
+      })
+      setShouldClearFile(true)
+      return
+    }
+
+    // Check for large files that will take time
+    const fileSizeMB = file.size / (1024 * 1024)
+    const isGif = file.type === 'image/gif'
+    const isVideo = file.type.startsWith('video/')
+    
+    let estimatedTime = ''
+    let shouldWarn = false
+    
+    if ((isGif || isVideo) && fileSizeMB > 100) {
+      estimatedTime = 'several minutes'
+      shouldWarn = true
+    } else if ((isGif || isVideo) && fileSizeMB > 50) {
+      estimatedTime = '1-2 minutes'
+      shouldWarn = true
+    }
+
+    if (shouldWarn) {
+      pendingFileRef.current = file
+      setLargeFileWarning({
+        isOpen: true,
+        file,
+        estimatedTime
+      })
+      // Still proceed with selection so the file shows in UI
+      proceedWithFileSelection(file)
+      return
+    }
+
+    // Proceed with file selection
+    proceedWithFileSelection(file)
+  }
+
+  const proceedWithFileSelection = (file: File) => {
     setSelectedFile(file)
     setCompressedFile(null)
     setProgress(0)
@@ -146,15 +241,13 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
     // Check if file is already under target size
     if (isFileAlreadyUnderLimit(file.size, targetSizeBytes)) {
       if (file.type.startsWith('video/')) {
-        setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed, but you can still download it.`)
+        setError(`Your video (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed.`)
       } else {
         setError(`Your ${file.type.startsWith('image/gif') ? 'GIF' : 'image'} (${fileSizeMB} MB) is already under the ${targetSizeMB} MB limit. No compression needed!`)
       }
       setFileAlreadyUnderLimit(true)
       return
     }
-
-    // All supported file types (images, GIFs, videos) are now handled by the server
   }
 
   const handleFileClear = () => {
@@ -252,6 +345,15 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
       return
     }
 
+    // Check server connectivity before starting
+    if (!isServerOnline) {
+      setValidationError({
+        isOpen: true,
+        message: 'Server is currently offline. Please ensure the server is running and try again.'
+      })
+      return
+    }
+
     setIsCompressing(true)
     setProgress(1)
     setError(null)
@@ -340,8 +442,30 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
       formData.append('targetSizeBytes', targetSizeBytes.toString())
 
       const xhr = new XMLHttpRequest()
+      
+      // Set timeout for very large files (10 minutes)
+      const timeoutDuration = 10 * 60 * 1000
+      const timeoutId = setTimeout(() => {
+        xhr.abort()
+        isComplete = true
+        
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+          progressIntervalRef.current = null
+        }
+        if (quipIntervalRef.current) {
+          clearInterval(quipIntervalRef.current)
+          quipIntervalRef.current = null
+        }
+        setIsCompressing(false)
+        setValidationError({
+          isOpen: true,
+          message: 'Compression timed out. The file may be too large or complex. Try reducing the file size or target size first.'
+        })
+      }, timeoutDuration)
 
       xhr.addEventListener('load', async () => {
+        clearTimeout(timeoutId)
         isComplete = true
 
         // Clear intervals
@@ -363,6 +487,9 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
             const wasCompressed = xhr.getResponseHeader('X-Was-Compressed') === 'true'
             const audioMutedHeader = xhr.getResponseHeader('X-Audio-Muted')
             const audioMuted = audioMutedHeader && audioMutedHeader === 'true'
+            const resolutionReduced = xhr.getResponseHeader('X-Resolution-Reduced')
+            const originalResolution = xhr.getResponseHeader('X-Original-Resolution')
+            const finalResolution = xhr.getResponseHeader('X-Final-Resolution')
 
             let filename = selectedFile.name
             if (contentDisposition) {
@@ -389,6 +516,45 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
               warning: audioMuted ? 'The audio track was muted to meet the target size.' : undefined
             }
 
+            // Show notifications for significant changes
+            if (audioMuted && resolutionReduced) {
+              setInfoModal({
+                isOpen: true,
+                title: 'VIDEO MODIFIED',
+                message: 'Both resolution and audio were adjusted to meet your target file size.',
+                type: 'resolution-reduced',
+                details: [
+                  `Resolution reduced: ${originalResolution} → ${finalResolution}`,
+                  'Audio track was completely removed',
+                  'These changes were necessary to reach the target size'
+                ]
+              })
+            } else if (resolutionReduced) {
+              setInfoModal({
+                isOpen: true,
+                title: 'RESOLUTION REDUCED',
+                message: 'Video resolution was reduced to meet your target file size.',
+                type: 'resolution-reduced',
+                details: [
+                  `Original resolution: ${originalResolution}`,
+                  `Final resolution: ${finalResolution}`,
+                  'Bitrate optimization alone was not enough to reach target size'
+                ]
+              })
+            } else if (audioMuted) {
+              setInfoModal({
+                isOpen: true,
+                title: 'AUDIO MUTED',
+                message: 'The audio track was removed to meet your target file size.',
+                type: 'audio-muted',
+                details: [
+                  'The video bitrate alone was not enough to reach the target size',
+                  'Audio has been completely removed from the final video',
+                  'Video quality has been preserved as much as possible'
+                ]
+              })
+            }
+
             handleCompressionComplete(result)
           } catch (parseError) {
             console.error('[CompressorTool] Failed to parse response:', parseError)
@@ -399,16 +565,40 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
           try {
             const errorData = JSON.parse(xhr.responseText)
             setIsCompressing(false)
-            setError(errorData.error || 'Upload failed')
+            
+            // Provide user-friendly error messages
+            let userMessage = errorData.error || 'Upload failed'
+            if (userMessage.includes('not supported for compression')) {
+              userMessage = `This video format is not supported. ${userMessage}`
+            } else if (userMessage.includes('Unsupported file type')) {
+              userMessage = 'This file type is not supported for compression. Please use images (JPEG, PNG, WebP, AVIF, TIFF, GIF) or videos (MP4, MOV, AVI, WebM, MKV).'
+            } else if (userMessage.includes('fileSize')) {
+              userMessage = 'File size exceeds the maximum allowed limit (2GB).'
+            }
+            
+            setValidationError({
+              isOpen: true,
+              message: userMessage
+            })
           } catch {
             setIsCompressing(false)
-            setError(`Upload failed with status ${xhr.status}`)
+            const statusMessages: { [key: number]: string } = {
+              400: 'Invalid file or request. Please check your file and try again.',
+              413: 'File is too large. Maximum upload size is 2GB.',
+              500: 'Server error occurred during compression. Please try again.',
+              503: 'Server is currently unavailable. Please try again later.'
+            }
+            setValidationError({
+              isOpen: true,
+              message: statusMessages[xhr.status] || `Upload failed (Error ${xhr.status}). Please try again.`
+            })
           }
         }
       })
 
       xhr.addEventListener('error', () => {
         console.error('[CompressorTool] Upload error')
+        clearTimeout(timeoutId)
         isComplete = true
         
         if (progressIntervalRef.current) {
@@ -420,7 +610,26 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
           quipIntervalRef.current = null
         }
         setIsCompressing(false)
-        setError('Network error. Please check if the server is running.')
+        setValidationError({
+          isOpen: true,
+          message: 'Network error occurred. Please check your internet connection and ensure the server is running.'
+        })
+      })
+      
+      xhr.addEventListener('abort', () => {
+        console.log('[CompressorTool] Upload aborted')
+        clearTimeout(timeoutId)
+        isComplete = true
+        
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+          progressIntervalRef.current = null
+        }
+        if (quipIntervalRef.current) {
+          clearInterval(quipIntervalRef.current)
+          quipIntervalRef.current = null
+        }
+        setIsCompressing(false)
       })
 
       xhr.open('POST', '/api/compress')
@@ -440,7 +649,10 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
         quipIntervalRef.current = null
       }
       setIsCompressing(false)
-      setError('Upload failed. Please try again.')
+      setValidationError({
+        isOpen: true,
+        message: error instanceof Error ? error.message : 'Upload failed. Please try again.'
+      })
     }
   }
 
@@ -530,6 +742,46 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
               shouldClearFile={shouldClearFile}
               onFileClear={handleFileClear}
             />
+
+            {!isServerOnline && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="border-4 border-red-500 bg-red-500/10 p-4 flex items-start gap-3 relative overflow-hidden"
+              >
+                <motion.div
+                  className="absolute inset-0 bg-red-500 opacity-0"
+                  animate={{ opacity: [0, 0.1, 0] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+                <motion.div
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                  className="relative z-10"
+                >
+                  <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                </motion.div>
+                <div className="flex-1 relative z-10">
+                  <motion.p 
+                    className="text-sm font-bold uppercase text-red-500 mb-1"
+                    initial={{ x: -10, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    SERVER OFFLINE
+                  </motion.p>
+                  <motion.p 
+                    className="text-sm"
+                    initial={{ x: -10, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    The compression server is currently unavailable. Please ensure the server is running.
+                  </motion.p>
+                </div>
+              </motion.div>
+            )}
 
             {error && (() => {
               const isInfo = error.includes('already under') || error.includes('No compression needed')
@@ -870,6 +1122,48 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
         }
         onProceed={handleQualityWarningProceed}
         onCancel={handleQualityWarningCancel}
+      />
+
+      <ErrorModal
+        isOpen={validationError.isOpen}
+        title="VALIDATION ERROR"
+        message={validationError.message}
+        onClose={() => {
+          setValidationError({ isOpen: false, message: '' })
+          setShouldClearFile(true)
+        }}
+      />
+
+      <InfoModal
+        isOpen={largeFileWarning.isOpen}
+        title="LARGE FILE WARNING"
+        message={`This ${largeFileWarning.file?.type.startsWith('video/') ? 'video' : 'GIF'} file is ${formatBytes(largeFileWarning.file?.size || 0)}. Compression may take ${largeFileWarning.estimatedTime}.`}
+        type="info"
+        details={[
+          'The compression process will run in the background',
+          'Progress indicator will show estimated completion'
+        ]}
+        onClose={() => {
+          setLargeFileWarning({ isOpen: false, file: null, estimatedTime: '' })
+          pendingFileRef.current = null
+        }}
+        proceedLabel="PROCEED ANYWAY"
+      />
+
+      <InfoModal
+        isOpen={infoModal.isOpen}
+        title={infoModal.title}
+        message={infoModal.message}
+        type={infoModal.type}
+        details={infoModal.details}
+        onClose={() => setInfoModal({ 
+          isOpen: false, 
+          title: '', 
+          message: '', 
+          type: 'info',
+          details: []
+        })}
+        proceedLabel="OK"
       />
     </div>
   )

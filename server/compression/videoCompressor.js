@@ -84,6 +84,10 @@ async function compressVideo(filePath, targetSizeBytes) {
     desiredAudioBitrate
   );
 
+  result.resolutionReduced = false;
+  result.originalResolution = `${width}x${height}`;
+  result.finalResolution = `${width}x${height}`;
+
   // If couldn't reach target with bitrate alone, try reducing resolution
   if (result.bestBitrate === null) {
     console.log('[VideoCompressor] Could not reach target with bitrate alone, trying resolution reduction');
@@ -119,6 +123,9 @@ async function compressVideo(filePath, targetSizeBytes) {
       );
 
       if (result.bestBitrate !== null) {
+        result.resolutionReduced = true;
+        result.originalResolution = `${width}x${height}`;
+        result.finalResolution = `${newWidth}x${resolution.height}`;
         break;
       }
     }
@@ -149,7 +156,10 @@ async function compressVideo(filePath, targetSizeBytes) {
     compressedSize: result.bestSize,
     wasCompressed: true,
     bitrate: result.bestBitrate,
-    audioMuted: desiredAudioBitrate === 0
+    audioMuted: desiredAudioBitrate === 0,
+    resolutionReduced: result.resolutionReduced,
+    originalResolution: result.originalResolution,
+    finalResolution: result.finalResolution
   };
 }
 

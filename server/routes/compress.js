@@ -5,6 +5,7 @@ const fs = require('fs');
 const { compressImage } = require('../compression/imageCompressor');
 const { compressGif } = require('../compression/gifCompressor');
 const { compressVideo } = require('../compression/videoCompressor');
+const { compressAudio } = require('../compression/audioCompressor');
 
 const router = express.Router();
 
@@ -42,6 +43,20 @@ const upload = multer({
         return cb(null, true);
       }
     }
+    // Audio handling
+    if (file.mimetype.startsWith('audio/')) {
+      const allowedAudioExt = [
+        '.mp3','.aac','.m4a','.ogg','.opus','.wma','.flac','.wav','.aiff','.aif','.alac'
+      ];
+      const blockedAudioExt = ['.ra','.ram','.mid','.midi','.amr','.ape','.ac3','.dts'];
+
+      if (blockedAudioExt.includes(ext)) {
+        return cb(new Error(`Audio format ${ext} is not supported for compression.`), false);
+      }
+      if (allowedAudioExt.includes(ext)) {
+        return cb(null, true);
+      }
+    }
 
     cb(new Error(`Unsupported file type: ${file.originalname}`), false);
   }
@@ -71,6 +86,8 @@ router.post('/compress', upload.single('file'), async (req, res) => {
       result = await compressGif(tmpFilePath, targetSize);
     } else if (mimetype.startsWith('video/')) {
       result = await compressVideo(tmpFilePath, targetSize);
+    } else if (mimetype.startsWith('audio/')) {
+      result = await compressAudio(tmpFilePath, targetSize);
     } else {
       result = await compressImage(tmpFilePath, targetSize, mimetype);
     }
@@ -99,6 +116,12 @@ router.post('/compress', upload.single('file'), async (req, res) => {
 
     if (result.audioMuted !== undefined) {
       res.setHeader('X-Audio-Muted', result.audioMuted.toString());
+    }
+
+    if (result.resolutionReduced !== undefined && result.resolutionReduced) {
+      res.setHeader('X-Resolution-Reduced', 'true');
+      res.setHeader('X-Original-Resolution', result.originalResolution || 'unknown');
+      res.setHeader('X-Final-Resolution', result.finalResolution || 'unknown');
     }
 
     res.send(result.buffer);

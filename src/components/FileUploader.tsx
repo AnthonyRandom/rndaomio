@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, DragEvent } from 'react'
 import { Upload, File, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn, formatBytes } from '@/lib/utils'
+import { ErrorModal } from './ErrorModal'
 
 interface FileUploaderProps {
   onFileSelect: (file: File) => void
@@ -13,6 +14,10 @@ interface FileUploaderProps {
 export function FileUploader({ onFileSelect, maxSize, shouldClearFile, onFileClear }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [errorModal, setErrorModal] = useState<{ isOpen: boolean; message: string }>({ 
+    isOpen: false, 
+    message: '' 
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -41,7 +46,10 @@ export function FileUploader({ onFileSelect, maxSize, shouldClearFile, onFileCle
     if (files.length > 0) {
       const file = files[0]
       if (maxSize && file.size > maxSize) {
-        alert(`File size exceeds ${formatBytes(maxSize)} limit`)
+        setErrorModal({
+          isOpen: true,
+          message: `File size exceeds ${formatBytes(maxSize)} limit. Maximum upload size is ${formatBytes(maxSize)}.`
+        })
         return
       }
       setSelectedFile(file)
@@ -54,7 +62,13 @@ export function FileUploader({ onFileSelect, maxSize, shouldClearFile, onFileCle
     if (files && files.length > 0) {
       const file = files[0]
       if (maxSize && file.size > maxSize) {
-        alert(`File size exceeds ${formatBytes(maxSize)} limit`)
+        setErrorModal({
+          isOpen: true,
+          message: `File size exceeds ${formatBytes(maxSize)} limit. Maximum upload size is ${formatBytes(maxSize)}.`
+        })
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
         return
       }
       setSelectedFile(file)
@@ -88,7 +102,7 @@ export function FileUploader({ onFileSelect, maxSize, shouldClearFile, onFileCle
           type="file"
           className="hidden"
           onChange={handleFileInput}
-          accept=".jpg,.jpeg,.png,.webp,.avif,.tiff,.tif,.gif,.mp4,.mov,.avi,.webm,.mkv"
+          accept=".jpg,.jpeg,.png,.webp,.avif,.tiff,.tif,.gif,.mp4,.mov,.avi,.webm,.mkv,.mp3,.aac,.m4a,.ogg,.opus,.wma,.flac,.wav,.aiff,.aif,.alac"
         />
         
         <div
@@ -131,6 +145,13 @@ export function FileUploader({ onFileSelect, maxSize, shouldClearFile, onFileCle
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ErrorModal
+        isOpen={errorModal.isOpen}
+        title="FILE SIZE ERROR"
+        message={errorModal.message}
+        onClose={() => setErrorModal({ isOpen: false, message: '' })}
+      />
     </div>
   )
 }

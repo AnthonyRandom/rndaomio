@@ -20,47 +20,41 @@ export function QualityWarningModal({
   onProceed,
   onCancel
 }: QualityWarningModalProps) {
+  if (!isOpen) return null;
+
   return createPortal(
     <AnimatePresence>
-      {isOpen && (
-        <>
-          <style dangerouslySetInnerHTML={{
-            __html: `
-              .scan-line, .noise {
-                display: none !important;
-              }
-            `
-          }} />
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/80 backdrop-blur-sm"
-            style={{
-              zIndex: 99999,
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100vw',
-              height: '100vh',
-              margin: 0,
-              padding: 0,
-              border: 'none',
-              outline: 'none'
-            }}
-            onClick={onCancel}
-          />
-          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 100000 }}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={SPRING_CONFIGS.modal}
-            className="border-4 border-yellow-500 bg-card max-w-md w-full p-6 shadow-2xl relative overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .scan-line, .noise {
+            display: none !important;
+          }
+        `
+      }} />
+      <motion.div
+        key="quality-modal-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm"
+        onClick={onCancel}
+      />
+      <motion.div 
+        key="quality-modal-wrapper"
+        className="fixed inset-0 z-[100000] flex items-center justify-center p-4 pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+      <motion.div
+        key="quality-modal-content"
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        transition={SPRING_CONFIGS.modal}
+        className="border-4 border-yellow-500 bg-card max-w-md w-full p-6 shadow-2xl relative overflow-hidden pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
               <motion.div
                 className="absolute inset-0 bg-yellow-500 opacity-20"
                 initial={{ x: '-100%' }}
@@ -146,9 +140,7 @@ export function QualityWarningModal({
                 </motion.div>
               </div>
             </motion.div>
-          </div>
-        </>
-      )}
+          </motion.div>
     </AnimatePresence>,
     document.body
   )

@@ -14,8 +14,7 @@ const BLOCKED_EXTENSIONS = [
   'cr2', 'nef', 'arw', 'psd', 'ai', 'blend', 'fbx', 'obj', 'stl', 'indd',
   // Documents
   'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  // Audio
-  'mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'
+  // Audio entries removed
 ]
 
 const BLOCKED_MIME_TYPES = [
@@ -34,10 +33,7 @@ const BLOCKED_MIME_TYPES = [
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  // Audio
-  'audio/mpeg',
-  'audio/wav',
-  'audio/ogg'
+  // Audio mime types removed
 ]
 
 const ALLOWED_CATEGORIES = {
@@ -60,12 +56,26 @@ const ALLOWED_CATEGORIES = {
     'video/x-ms-wmv',
     'video/3gpp',
     'video/3gpp2'
+  ],
+  audio: [
+    'audio/mpeg',
+    'audio/aac',
+    'audio/mp4',
+    'audio/ogg',
+    'audio/opus',
+    'audio/x-ms-wma',
+    'audio/flac',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/aiff',
+    'audio/x-aiff',
+    'audio/alac'
   ]
 }
 
 export interface ValidationResult {
   isValid: boolean
-  category?: 'image' | 'video'
+  category?: 'image' | 'video' | 'audio'
   mimeType?: string
   error?: string
 }
@@ -104,7 +114,7 @@ export async function validateFile(file: File): Promise<ValidationResult> {
       if (mimeTypes.includes(fileType.mime)) {
         return {
           isValid: true,
-          category: category as 'image' | 'video',
+          category: category as 'image' | 'video' | 'audio',
           mimeType: fileType.mime
         }
       }
@@ -112,7 +122,7 @@ export async function validateFile(file: File): Promise<ValidationResult> {
 
     return {
       isValid: false,
-      error: `Unsupported file type "${fileType.mime}". Only images and videos are supported.`
+      error: `Unsupported file type "${fileType.mime}". Only images, videos, and audio are supported.`
     }
   } catch (error) {
     return {
@@ -125,7 +135,8 @@ export async function validateFile(file: File): Promise<ValidationResult> {
 export function formatFileType(category: string): string {
   const labels: Record<string, string> = {
     image: 'Image',
-    video: 'Video'
+    video: 'Video',
+    audio: 'Audio'
   }
   return labels[category] || 'Unknown'
 }
