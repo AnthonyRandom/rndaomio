@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAppearanceContext } from '@/lib/AppearanceContext'
 
 interface ScrambleTextProps {
   text: string
@@ -17,21 +18,33 @@ export function ScrambleText({
   revealSpeed = 40,
   className = '' 
 }: ScrambleTextProps) {
-  const [displayText, setDisplayText] = useState(text.split('').map(() => 
-    SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)]
-  ).join(''))
-  const [revealedCount, setRevealedCount] = useState(0)
-  const [isScrambling, setIsScrambling] = useState(true)
+  const { settings } = useAppearanceContext()
+  const [displayText, setDisplayText] = useState(
+    settings.reducedMotion 
+      ? text 
+      : text.split('').map(() => SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)]).join('')
+  )
+  const [revealedCount, setRevealedCount] = useState(settings.reducedMotion ? text.length : 0)
+  const [isScrambling, setIsScrambling] = useState(!settings.reducedMotion)
 
   useEffect(() => {
+    if (settings.reducedMotion) {
+      setDisplayText(text)
+      setRevealedCount(text.length)
+      setIsScrambling(false)
+      return
+    }
+
     const startTime = setTimeout(() => {
       setIsScrambling(false)
     }, delay)
 
     return () => clearTimeout(startTime)
-  }, [delay])
+  }, [delay, settings.reducedMotion, text])
 
   useEffect(() => {
+    if (settings.reducedMotion) return
+    
     if (isScrambling) {
       const scrambleInterval = setInterval(() => {
         setDisplayText(text.split('').map((char) => {
@@ -45,6 +58,8 @@ export function ScrambleText({
   }, [isScrambling, text, scrambleSpeed])
 
   useEffect(() => {
+    if (settings.reducedMotion) return
+    
     if (!isScrambling && revealedCount < text.length) {
       const revealTimeout = setTimeout(() => {
         setRevealedCount(prev => prev + 1)
@@ -52,9 +67,11 @@ export function ScrambleText({
 
       return () => clearTimeout(revealTimeout)
     }
-  }, [isScrambling, revealedCount, text.length, revealSpeed])
+  }, [isScrambling, revealedCount, text.length, revealSpeed, settings.reducedMotion])
 
   useEffect(() => {
+    if (settings.reducedMotion) return
+    
     if (!isScrambling && revealedCount < text.length) {
       const scrambleInterval = setInterval(() => {
         const newDisplay = text.split('').map((char, index) => {
@@ -69,7 +86,7 @@ export function ScrambleText({
     } else if (revealedCount >= text.length) {
       setDisplayText(text)
     }
-  }, [revealedCount, isScrambling, text, scrambleSpeed])
+  }, [revealedCount, isScrambling, text, scrambleSpeed, settings.reducedMotion])
 
   return <span className={className}>{displayText}</span>
 }

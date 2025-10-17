@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { FileUploader } from './FileUploader'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
@@ -12,6 +12,8 @@ import { Download, Zap, CheckCircle2, AlertCircle, Info } from 'lucide-react'
 import { formatBytes, generateId, formatFileSizeMB, getTargetSizeMB, isFileAlreadyUnderLimit } from '@/lib/utils'
 import { ANIMATION_DURATIONS, SPRING_CONFIGS } from '@/lib/animationConstants'
 import { validateFile } from '@/lib/fileValidator'
+import { useAppearanceContext } from '@/lib/AppearanceContext'
+import { useCompressionSettingsContext } from '@/lib/CompressionSettingsContext'
 
 interface CompressionResult {
   file: File
@@ -80,8 +82,10 @@ interface CompressorToolProps {
 }
 
 export function CompressorTool({ isLoaded }: CompressorToolProps) {
+  const { settings } = useAppearanceContext()
+  const { settings: compressionSettings } = useCompressionSettingsContext()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [targetSize, setTargetSize] = useState<string>('10MB')
+  const [targetSize, setTargetSize] = useState<string>(compressionSettings.defaultTargetSize)
   const [isCompressing, setIsCompressing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [compressedFile, setCompressedFile] = useState<CompressedFile | null>(null)
@@ -685,6 +689,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
   }
 
   return (
+    <MotionConfig reducedMotion={settings.reducedMotion ? "always" : "never"}>
     <div className="space-y-8">
       <div className="border-4 border-border bg-card/50 p-8">
         <div className="space-y-6">
@@ -1029,7 +1034,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
                       onClick={() => {
                         const a = document.createElement('a')
                         a.href = compressedFile.downloadUrl
-                        a.download = `compressed_${compressedFile.originalName}`
+                        a.download = `${compressionSettings.preserveOriginalFilenames ? '' : 'compressed_'}${compressedFile.originalName}`
                         a.click()
                       }}
                       className="w-full"
@@ -1166,6 +1171,7 @@ export function CompressorTool({ isLoaded }: CompressorToolProps) {
         proceedLabel="OK"
       />
     </div>
+    </MotionConfig>
   )
 }
 

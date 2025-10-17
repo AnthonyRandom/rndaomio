@@ -1,23 +1,28 @@
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { CompressorTool } from './components/CompressorTool'
 import { MediaDownloader } from './components/MediaDownloader'
+import { Settings as SettingsComponent } from './components/Settings'
 import { ScrambleText } from './components/ScrambleText'
+import { useTheme } from './lib/useTheme'
+import { useAppearanceContext } from './lib/AppearanceContext'
 import { Terminal, Zap, FileCode, Image, Settings, Download } from 'lucide-react'
 
 function App() {
   const [currentTool, setCurrentTool] = useState('downloader')
   const [isLoaded, setIsLoaded] = useState(false)
+  const { settings } = useAppearanceContext()
+  
+  useTheme()
 
   useEffect(() => {
     setTimeout(() => setIsLoaded(true), 1000)
   }, [])
 
   return (
-    <div className="min-h-screen bg-background text-foreground relative overflow-hidden flex flex-col">
-      <div className="scan-line" />
-      
-      <div className="relative z-10 flex-1 flex flex-col">
+    <MotionConfig reducedMotion={settings.reducedMotion ? "always" : "never"}>
+      <div className="min-h-screen bg-background text-foreground relative overflow-hidden flex flex-col">
+        <div className="relative z-10 flex-1 flex flex-col">
         <header className="border-b-4 border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
           <div className="container mx-auto px-6 py-6">
             <div className="flex items-center justify-between">
@@ -85,7 +90,7 @@ function App() {
                     { id: 'compressor', label: 'File Compressor', icon: Zap, active: true },
                     { id: 'converter', label: 'Format Converter', icon: FileCode, active: false },
                     { id: 'optimizer', label: 'Image Optimizer', icon: Image, active: false },
-                    { id: 'settings', label: 'Settings', icon: Settings, active: false },
+                    { id: 'settings', label: 'Settings', icon: Settings, active: true },
                   ].map((tool, index) => (
                     <motion.button
                       key={tool.id}
@@ -153,6 +158,7 @@ function App() {
             <main className="col-span-9">
               {currentTool === 'downloader' && <MediaDownloader isLoaded={isLoaded} />}
               {currentTool === 'compressor' && <CompressorTool isLoaded={isLoaded} />}
+              {currentTool === 'settings' && <SettingsComponent isLoaded={isLoaded} />}
             </main>
           </div>
         </div>
@@ -199,7 +205,8 @@ function App() {
           </div>
         </footer>
       </div>
-    </div>
+      </div>
+    </MotionConfig>
   )
 }
 

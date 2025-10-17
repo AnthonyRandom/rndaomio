@@ -71,10 +71,6 @@ export default {
           "80%": { transform: "translate(2px, -2px)" },
           "100%": { transform: "translate(0)" },
         },
-        "scan-line": {
-          "0%": { transform: "translateY(-100%)" },
-          "100%": { transform: "translateY(100vh)" },
-        },
         "glitch-before": {
           "0%": { clipPath: "inset(40% 0 61% 0)" },
           "20%": { clipPath: "inset(92% 0 1% 0)" },
@@ -96,7 +92,6 @@ export default {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "glitch": "glitch 0.3s cubic-bezier(.25, .46, .45, .94) both",
-        "scan-line": "scan-line 8s linear infinite",
         "glitch-before": "glitch-before var(--before-duration) infinite linear alternate-reverse",
         "glitch-after": "glitch-after var(--after-duration) infinite linear alternate-reverse",
       },

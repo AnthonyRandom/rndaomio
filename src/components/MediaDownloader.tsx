@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
 import { ScrambleText } from './ScrambleText'
@@ -8,6 +8,8 @@ import { InfoModal } from './InfoModal'
 import { Download, Link as LinkIcon, CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-react'
 import { formatBytes, generateId } from '@/lib/utils'
 import { ANIMATION_DURATIONS, SPRING_CONFIGS } from '@/lib/animationConstants'
+import { useAppearanceContext } from '@/lib/AppearanceContext'
+import { useDownloadSettingsContext } from '@/lib/DownloadSettingsContext'
 
 interface MediaInfo {
   title: string
@@ -81,6 +83,8 @@ const EXAMPLE_URLS = [
 ]
 
 export function MediaDownloader({ isLoaded }: MediaDownloaderProps) {
+  const { settings } = useAppearanceContext()
+  const { settings: downloadSettings } = useDownloadSettingsContext()
   const [url, setUrl] = useState('')
   const [isDownloading, setIsDownloading] = useState(false)
   const [isFetchingInfo, setIsFetchingInfo] = useState(false)
@@ -234,6 +238,47 @@ export function MediaDownloader({ isLoaded }: MediaDownloaderProps) {
     }
   }
 
+  const validateDownloadSettings = () => {
+    // Check for impossible combinations
+    if (downloadSettings.audioFormat !== 'auto' && downloadSettings.videoQuality !== 'auto') {
+      return 'Cannot specify both audio format and video quality. Choose audio format for audio-only downloads or video quality for video downloads.'
+    }
+
+    if (downloadSettings.audioFormat !== 'auto' && downloadSettings.videoCodec !== 'auto') {
+      return 'Cannot specify both audio format and video codec. Video codec is for video files only.'
+    }
+
+    if (downloadSettings.audioFormat !== 'auto' && downloadSettings.fileContainer !== 'auto') {
+      return 'Cannot specify both audio format and file container. File container is for video files only.'
+    }
+
+    // Check for incompatible codec/container combinations
+    if (downloadSettings.videoCodec === 'vp9' && downloadSettings.fileContainer === 'mp4') {
+      return 'VP9 codec is not compatible with MP4 container. Use WebM for VP9.'
+    }
+
+    if (downloadSettings.videoCodec === 'av1' && downloadSettings.fileContainer === 'mp4') {
+      return 'AV1 codec is not compatible with MP4 container. Use MKV for AV1.'
+    }
+
+    // Check for incompatible audio format/bitrate combinations
+    if (downloadSettings.audioFormat === 'flac' && downloadSettings.audioBitrate !== 'auto') {
+      return 'FLAC is a lossless format. Audio bitrate setting will be ignored.'
+    }
+
+    // Check for subtitle download with incompatible formats
+    if (downloadSettings.downloadSubtitles && downloadSettings.audioFormat !== 'auto') {
+      return 'Subtitles cannot be downloaded with audio-only formats. Disable subtitles or choose video format.'
+    }
+
+    // Check for thumbnail/metadata embedding with incompatible formats
+    if ((downloadSettings.embedThumbnail || downloadSettings.embedMetadata) && downloadSettings.audioFormat === 'mp3') {
+      return 'Thumbnail and metadata embedding is limited for MP3 format. Consider using M4A for better metadata support.'
+    }
+
+    return null // No validation errors
+  }
+
   const downloadMedia = async () => {
     if (!url.trim()) {
       setValidationError({
@@ -255,6 +300,16 @@ export function MediaDownloader({ isLoaded }: MediaDownloaderProps) {
       setValidationError({
         isOpen: true,
         message: 'Server is currently offline. Please ensure the server is running and try again.'
+      })
+      return
+    }
+
+    // Validate download settings
+    const validationError = validateDownloadSettings()
+    if (validationError) {
+      setValidationError({
+        isOpen: true,
+        message: validationError
       })
       return
     }
@@ -431,7 +486,10 @@ export function MediaDownloader({ isLoaded }: MediaDownloaderProps) {
       xhr.open('POST', '/api/download')
       xhr.setRequestHeader('Content-Type', 'application/json')
       xhr.responseType = 'blob'
-      xhr.send(JSON.stringify({ url, format: 'best' }))
+      xhr.send(JSON.stringify({
+        url,
+        settings: downloadSettings
+      }))
 
     } catch (error) {
       console.error('[MediaDownloader] Download failed:', error)
@@ -454,6 +512,7 @@ export function MediaDownloader({ isLoaded }: MediaDownloaderProps) {
   }
 
   return (
+    <MotionConfig reducedMotion={settings.reducedMotion ? "always" : "never"}>
     <div className="space-y-8">
       <div className="border-4 border-border bg-card/50 p-8">
         <div className="space-y-6">
@@ -463,29 +522,45 @@ export function MediaDownloader({ isLoaded }: MediaDownloaderProps) {
             animate={{ opacity: 1 }}
             transition={{ duration: ANIMATION_DURATIONS.normal }}
           >
-            <h2 className="text-2xl font-bold uppercase tracking-wider flex items-center gap-2">
-              <motion.div
-                animate={{
-                  rotate: [0, -10, 10, -5, 5, 0],
-                  scale: [1, 1.1, 1]
-                }}
-                transition={{ duration: ANIMATION_DURATIONS.medium, delay: 0.5 }}
-              >
-                <Download className="h-6 w-6" />
-              </motion.div>
-              {!isLoaded ? (
-                <ScrambleText text="MEDIA DOWNLOADER" delay={1500} scrambleSpeed={12} revealSpeed={20} />
-              ) : (
-                'MEDIA DOWNLOADER'
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-2xl font-bold uppercase tracking-wider flex items-center gap-2">
+                  <motion.div
+                    animate={{
+                      rotate: [0, -10, 10, -5, 5, 0],
+                      scale: [1, 1.1, 1]
+                    }}
+                    transition={{ duration: ANIMATION_DURATIONS.medium, delay: 0.5 }}
+                  >
+                    <Download className="h-6 w-6" />
+                  </motion.div>
+                  {!isLoaded ? (
+                    <ScrambleText text="MEDIA DOWNLOADER" delay={1500} scrambleSpeed={12} revealSpeed={20} />
+                  ) : (
+                    'MEDIA DOWNLOADER'
+                  )}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-2 uppercase tracking-wide">
+                  {!isLoaded ? (
+                    <ScrambleText text="DOWNLOAD FROM MULTIPLE PLATFORMS" delay={1600} scrambleSpeed={12} revealSpeed={18} />
+                  ) : (
+                    'DOWNLOAD FROM MULTIPLE PLATFORMS'
+                  )}
+                </p>
+              </div>
+              {downloadSettings.videoQuality !== 'auto' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="border-2 border-accent bg-accent/10 px-3 py-1.5"
+                >
+                  <p className="text-xs uppercase tracking-wider text-accent font-bold">
+                    {downloadSettings.videoQuality}
+                  </p>
+                </motion.div>
               )}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-2 uppercase tracking-wide">
-              {!isLoaded ? (
-                <ScrambleText text="DOWNLOAD FROM MULTIPLE PLATFORMS" delay={1600} scrambleSpeed={12} revealSpeed={18} />
-              ) : (
-                'DOWNLOAD FROM MULTIPLE PLATFORMS'
-              )}
-            </p>
+            </div>
           </motion.div>
 
           <div className="space-y-6">
@@ -956,6 +1031,7 @@ export function MediaDownloader({ isLoaded }: MediaDownloaderProps) {
         proceedLabel="OK"
       />
     </div>
+    </MotionConfig>
   )
 }
 
